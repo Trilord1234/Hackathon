@@ -2,6 +2,9 @@ import socket
 
 HAUTEUR, LARGEUR = 16, 18
 
+def distance(l1, c1, l2, c2):
+    return max(abs(l1 - l2), abs(c1 - c2))
+
 class BotAgressif:
     def __init__(self):
         self.equipe = "Bot_Agressif"
@@ -22,12 +25,9 @@ class BotAgressif:
         line, self._buffer = self._buffer.split('\n', 1)
         return line.strip()
 
-    def envoyer_query(self, cmd):
+    def envoyer(self, cmd):
         self.sock.sendall((cmd + "\n").encode('utf-8'))
         return self._readline()
-
-    def envoyer_action(self, cmd):
-        self.sock.sendall((cmd + "\n").encode('utf-8'))
 
     def connecter(self):
         self.sock.connect(("127.0.0.1", 1234))
@@ -53,14 +53,14 @@ class BotAgressif:
             tour = msg.split('|')[1] if '|' in msg else "?"
             print(f"[Agressif] === Tour {tour} ===")
 
-            rep_densite = self.envoyer_query("DENSITE")
-            rep_elements = self.envoyer_query("ELEMENTS")
+            rep_densite = self.envoyer("DENSITE")
+            rep_elements = self.envoyer("ELEMENTS")
             for i in range(HAUTEUR * LARGEUR):
                 l, c = divmod(i, LARGEUR)
                 self.plateau[(l, c)]['densite'] = int(rep_densite[i])
                 self.plateau[(l, c)]['element'] = rep_elements[i]
 
-            actions = 15
+            actions = 13
             mes_unites = [
                 (l, c) for (l, c), d in self.plateau.items()
                 if d['element'] == str(self.mon_id)
@@ -71,22 +71,20 @@ class BotAgressif:
             ]
 
             if not mes_unites and actions > 0:
-                self.envoyer_action("AJOUTERRECOLTEUSE|8|9")
+                rep = self.envoyer("AJOUTERRECOLTEUSE|8|9")
                 actions -= 1
             elif mes_unites and ennemis:
                 cible_l, cible_c = ennemis[0]
-                mouvements = [(-1,0),(1,0),(0,-1),(0,1),(-1,-1),(1,1)]
                 for ml, mc in mes_unites:
                     if actions <= 0:
                         break
-                    for dl, dc in mouvements:
+                    for dl, dc in [(-1,0),(1,0),(0,-1),(0,1),(-1,-1),(1,1)]:
                         nl, nc = cible_l + dl, cible_c + dc
                         if (nl, nc) in self.plateau and self.plateau[(nl, nc)]['element'] == 'X':
-                            self.envoyer_action(f"DEPLACER|{ml}|{mc}|{nl}|{nc}")
+                            self.envoyer(f"DEPLACER|{ml}|{mc}|{nl}|{nc}")
                             actions -= 1
                             break
             else:
-                # Pas d'ennemis : farm
                 cases_libres = [
                     (l, c) for (l, c), d in self.plateau.items() if d['element'] == 'X'
                 ]
@@ -94,10 +92,12 @@ class BotAgressif:
                 for l, c in cases_libres:
                     if actions <= 0:
                         break
-                    self.envoyer_action(f"AJOUTERRECOLTEUSE|{l}|{c}")
+                    rep = self.envoyer(f"AJOUTERRECOLTEUSE|{l}|{c}")
                     actions -= 1
+                    if rep == "NOK":
+                        break
 
-            self.sock.sendall(("FINDETOUR\n").encode('utf-8'))
+            self.envoyer("FINDETOUR")
 
 
 if __name__ == "__main__":
@@ -105,5 +105,7 @@ if __name__ == "__main__":
         BotAgressif().connecter()
     except ConnectionResetError:
         print("[Agressif] Déconnecté (fin de partie).")
+    except ConnectionError as e:
+        print(f"[Agressif] Connexion perdue : {e}")
     except KeyboardInterrupt:
         pass

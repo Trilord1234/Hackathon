@@ -47,17 +47,21 @@ class SpiceBotUltime:
         line, self._buffer = self._buffer.split('\n', 1)
         return line.strip()
 
-    def envoyer_query(self, cmd):
-        """Envoie une commande ET attend une réponse (DENSITE, ELEMENTS, WARNING)."""
+    def envoyer(self, cmd):
+        """Envoie une commande ET lit la réponse (OK/NOK ou données).
+        À utiliser pour TOUT : queries ET actions.
+        Le serveur répond toujours OK ou NOK selon le manuel."""
         self.sock.sendall((cmd + "\n").encode('utf-8'))
-        return self._readline()
+        rep = self._readline()
+        return rep
 
     def envoyer_action(self, cmd):
-        """Envoie une action SANS attendre de réponse (AJOUTERRECOLTEUSE, DEPLACER, etc.)
-        Le serveur ne répond probablement pas aux actions — bloquer ici = timeout = kick."""
+        """Wrapper qui appelle envoyer() et décrémente le compteur d'actions."""
         if self.actions_restantes > 0:
-            self.sock.sendall((cmd + "\n").encode('utf-8'))
+            rep = self.envoyer(cmd)
             self.actions_restantes -= 1
+            return rep
+        return None
 
     # ─────────────────────────────────────────────
     # CONNEXION & BOUCLE PRINCIPALE
@@ -69,7 +73,6 @@ class SpiceBotUltime:
 
         msg = self._readline()
         if msg == "NOM_EQUIPE":
-            # Le nom d'équipe a une réponse ("Bonjour... vous êtes l'équipe |X")
             self.sock.sendall((self.equipe + "\n").encode('utf-8'))
             reponse = self._readline()
             print(f"[*] Réponse serveur : {reponse}")
@@ -83,8 +86,9 @@ class SpiceBotUltime:
         self.boucle_jeu()
 
     def actualiser_plateau(self):
-        rep_densite = self.envoyer_query("DENSITE")
-        rep_elements = self.envoyer_query("ELEMENTS")
+        rep_densite = self.envoyer("DENSITE")
+        rep_elements = self.envoyer("ELEMENTS")
+        self.actions_restantes -= 2  # comptabilise les 2 queries
 
         if len(rep_densite) >= HAUTEUR * LARGEUR and len(rep_elements) >= HAUTEUR * LARGEUR:
             for i in range(HAUTEUR * LARGEUR):
@@ -106,8 +110,6 @@ class SpiceBotUltime:
             if not msg:
                 continue
 
-            # Le serveur peut envoyer des messages inattendus (OK, NOK, etc.)
-            # On les ignore et on attend uniquement DEBUT_TOUR
             if not msg.startswith("DEBUT_TOUR"):
                 print(f"[~] Message ignoré : {msg}")
                 continue
@@ -118,14 +120,15 @@ class SpiceBotUltime:
             self.actions_restantes = MAX_ACTIONS
 
             self.actualiser_plateau()
-            alertes_vers = self.envoyer_query("WARNING").split('|')
+            alertes_vers = self.envoyer("WARNING").split('|')
+            self.actions_restantes -= 1  # comptabilise WARNING
             print(f"[*] Alertes Vers : {alertes_vers}")
+            # Il reste MAX_ACTIONS - 3 = 12 actions réelles
 
             self.jouer_tour(alertes_vers)
 
             print(f"[*] Fin du tour. Actions restantes : {self.actions_restantes}")
-            # FINDETOUR : pas de réponse attendue
-            self.sock.sendall(("FINDETOUR\n").encode('utf-8'))
+            self.envoyer("FINDETOUR")
 
     # ─────────────────────────────────────────────
     # CERVEAU : STRATÉGIE IMITATEUR
@@ -191,7 +194,11 @@ class SpiceBotUltime:
                 break
             if not any(distance_rapide(l, c, el, ec) <= 2 for el, ec in ennemis):
                 print(f"  [Farming] Récolteuse ({l},{c}) densité={self.plateau[(l,c)]['densite']}")
-                self.envoyer_action(f"AJOUTERRECOLTEUSE|{l}|{c}")
+                rep = self.envoyer_action(f"AJOUTERRECOLTEUSE|{l}|{c}")
+                if rep == "NOK":
+                    # Plus d'argent — arrêter les achats
+                    print("  [!] NOK reçu — plus d'argent, stop farming")
+                    break
 
 
 if __name__ == "__main__":
@@ -201,7 +208,10 @@ if __name__ == "__main__":
         bot.connecter()
     except ConnectionResetError:
         print("\n[!] Serveur déconnecté (fin de partie ou kick).")
+    except ConnectionError as e:
+        print(f"\n[!] Connexion perdue : {e}")
     except KeyboardInterrupt:
         print("\n[!] Arrêt du bot.")
     except Exception as e:
         print(f"[X] Erreur critique : {e}")
+        import traceback; traceback.print_exc()

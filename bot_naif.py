@@ -22,12 +22,10 @@ class BotNaif:
         line, self._buffer = self._buffer.split('\n', 1)
         return line.strip()
 
-    def envoyer_query(self, cmd):
+    def envoyer(self, cmd):
+        """Envoie une commande et lit la réponse (OK/NOK ou données)."""
         self.sock.sendall((cmd + "\n").encode('utf-8'))
         return self._readline()
-
-    def envoyer_action(self, cmd):
-        self.sock.sendall((cmd + "\n").encode('utf-8'))
 
     def connecter(self):
         self.sock.connect(("127.0.0.1", 1234))
@@ -53,14 +51,15 @@ class BotNaif:
             tour = msg.split('|')[1] if '|' in msg else "?"
             print(f"[Naif] === Tour {tour} ===")
 
-            rep_densite = self.envoyer_query("DENSITE")
-            rep_elements = self.envoyer_query("ELEMENTS")
+            # 2 queries utilisées sur les 15
+            rep_densite = self.envoyer("DENSITE")
+            rep_elements = self.envoyer("ELEMENTS")
             for i in range(HAUTEUR * LARGEUR):
                 l, c = divmod(i, LARGEUR)
                 self.plateau[(l, c)]['densite'] = int(rep_densite[i])
                 self.plateau[(l, c)]['element'] = rep_elements[i]
 
-            actions = 15
+            actions = 13  # 15 - 2 queries
             cases_libres = [
                 (l, c) for (l, c), d in self.plateau.items() if d['element'] == 'X'
             ]
@@ -69,10 +68,12 @@ class BotNaif:
             for l, c in cases_libres:
                 if actions <= 0:
                     break
-                self.envoyer_action(f"AJOUTERRECOLTEUSE|{l}|{c}")
+                rep = self.envoyer(f"AJOUTERRECOLTEUSE|{l}|{c}")
                 actions -= 1
+                if rep == "NOK":
+                    break  # plus d'argent
 
-            self.sock.sendall(("FINDETOUR\n").encode('utf-8'))
+            self.envoyer("FINDETOUR")
 
 
 if __name__ == "__main__":
@@ -80,5 +81,7 @@ if __name__ == "__main__":
         BotNaif().connecter()
     except ConnectionResetError:
         print("[Naif] Déconnecté (fin de partie).")
+    except ConnectionError as e:
+        print(f"[Naif] Connexion perdue : {e}")
     except KeyboardInterrupt:
         pass
