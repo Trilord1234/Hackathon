@@ -1,5 +1,4 @@
 import socket
-import time
 
 HAUTEUR, LARGEUR = 16, 18
 
@@ -16,6 +15,9 @@ class BotNaif:
     def envoyer(self, cmd):
         self.sock.sendall((cmd + "\n").encode('utf-8'))
         return self.sock.recv(4096).decode('utf-8').strip()
+
+    def envoyer_sans_reponse(self, cmd):
+        self.sock.sendall((cmd + "\n").encode('utf-8'))
 
     def connecter(self):
         self.sock.connect(("127.0.0.1", 1234))
@@ -36,18 +38,16 @@ class BotNaif:
                     self.plateau[(l, c)]['densite'] = int(rep_densite[i])
                     self.plateau[(l, c)]['element'] = rep_elements[i]
                 
-                # --- CERVEAU NAÏF ---
                 actions = 15
-                # Cherche les cases libres triées par densité d'épice
                 cases_libres = [(l, c) for (l, c), d in self.plateau.items() if d['element'] == 'X']
                 cases_libres.sort(key=lambda coord: self.plateau[coord]['densite'], reverse=True)
                 
                 for l, c in cases_libres:
                     if actions <= 0: break
-                    self.envoyer(f"AJOUTERRECOLTEUSE|{l}|{c}")
+                    self.envoyer_sans_reponse(f"AJOUTERRECOLTEUSE|{l}|{c}") # CORRIGÉ
                     actions -= 1
                 
-                self.envoyer("FINDETOUR")
+                self.envoyer_sans_reponse("FINDETOUR") # CORRIGÉ
 
 if __name__ == "__main__":
     BotNaif().connecter()
