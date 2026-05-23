@@ -1,25 +1,78 @@
-#!/usr/bin/env python3
 # ============================================================
-#  RedHood — IA For The Spice
+#  RedHood — IA For The Spice  (v2)
 # ============================================================
+#
+#  COÛTS RÉELS (selon le tableau des commandes)
+#    Récolteuse  : 3 000
+#    Usine       : 5 000
+#    Ornithoptère: 400
+#    Sabotage    : 600
+#    Déplacement : GRATUIT
+#
+#  CHANGEMENTS v2 vs v1
+#  ────────────────────
+#  • BUGFIX : rendement_actuel() séparé pour gain_deplacement (plus de +1 fictif)
+#  • BUGFIX : usines uniquement si allies > ennemis dans le rayon
+#  • Sabotage dès le tour 25 (au lieu de 50)
+#  • 3 récolteuses/tour en expansion (au lieu de 2)
+#  • Déplacements optimisants dès le tour 6 (au lieu de 16)
+#  • Réserve réduite à 1 000 (coûts bas le justifient)
+#  • Sabotage en phase finale : budget_min = 1× (plus agressif)
+#  • Récupération d'actions restantes : si des actions sont libres
+#    en fin de tour, on tente des récolteuses supplémentaires
+#
+#  STRATÉGIE EN 3 PHASES
+#  ─────────────────────
+#  EXPANSION  (tours 1–15)
+#    • 3 récolteuses/tour dans les meilleurs secteurs libres
+#    • Diversification : max 1 par secteur par tour en expansion
+#    • Orni sur chaque secteur occupé dès le 1er tour avec récolteuses
+#    • Déplacements dès le tour 6 si gain > seuil
+#
+#  EXPLOITATION  (tours 16–150)
+#    • Jusqu'à 5 récolteuses/tour (budget-limité)
+#    • Max 2 récolteuses par secteur par tour
+#    • Vol actif : se poser à côté d'ennemis si gain net positif
+#    • Usines dès que allies > ennemis dans rayon 2
+#    • Sabotages à partir du tour 25
+#
+#  FINALE  (tours 151–200)
+#    • Plus de nouvelles récolteuses (risque ver trop élevé)
+#    • Déplacements uniquement (gratuits et sûrs)
+#    • Sabotages agressifs, ornis sur tout
+#
+# ============================================================
+
 import socket
 
 from Maps import (
     maps, update_map, get_my_spice, classify_threats_scores,
-    find_best_locations, find_best_factory_spot,
+    find_best_locations, find_best_factory_spot, find_best_moves,
     strategic_sabotage_advance, evacuation_protocol,
-    get_secteur_de_case, apply_bonus_factories, get_hex_neighbors
+    get_secteur_de_case, apply_bonus_factories, gain_placement
 )
 
-# -------- Configuration --------
+# ── Configuration ──────────────────────────────────────────
 HOST      = "127.0.0.1"
 PORT      = 1234
-TEAM_NAME = "RedHood"      # < 15 caractères
+TEAM_NAME = "RedHood"
 
-# -------- Constantes -----------
-COUT_ACTION = 5000
-MAX_ACTIONS = 15           # quota serveur
-ROWS, COLS  = 16, 18
+# ── Coûts ──────────────────────────────────────────────────
+COUT_RECOLTEUSE = 3_000
+COUT_USINE      = 5_000
+COUT_ORNI       = 400
+COUT_SABOTAGE   = 600
+RESERVE         = 1_000   # réduit de 1500→1000 : coûts bas le justifient
+
+# ── Paramètres jeu ─────────────────────────────────────────
+MAX_ACTIONS        = 15
+ROWS, COLS         = 16, 18
+PHASE_DEPLACEMENTS = 6    # v2 : déplacements dès tour 6 (vs 16 avant)
+PHASE_EXPLOITATION = 16
+PHASE_SABOTAGE     = 25   # v2 : sabotage dès tour 25 (vs 50 avant)
+PHASE_FINALE       = 151
+
+MAX_RECOLT_PAR_SECTEUR = 6
 
 
 # ==============================================================
@@ -38,7 +91,7 @@ class GameClient:
             try:
                 chunk = self.sock.recv(4096).decode('utf-8')
                 if not chunk:
-                    raise ConnectionError("Connexion fermée par le serveur.")
+                    raise ConnectionError("Connexion fermée.")
                 self.buffer += chunk
             except socket.timeout:
                 break
@@ -52,340 +105,382 @@ class GameClient:
         self.sock.sendall((msg + '\n').encode('utf-8'))
 
     def command(self, msg):
-        """Envoie une commande/demande et retourne la réponse brute."""
         self.send(msg)
         return self.recv_line()
 
 
 # ==============================================================
-#  Logique RedHood
+#  RedHood
 # ==============================================================
 
 class RedHood:
     def __init__(self):
-        self.client   = GameClient(HOST, PORT)
-        self.mon_id   = None
-        self.epice    = 0
-        self.tour     = 0
-
-        # Compteur d'actions envoyées ce tour (hors FINDETOUR)
+        self.client     = GameClient(HOST, PORT)
+        self.mon_id     = None
+        self.epice      = 0
+        self.tour       = 0
         self.nb_actions = 0
 
-        # État du jeu
         self.maps               = maps
         self.classement_ennemis = []
+        self.ornithopteres      = {0:0, 1:0, 2:0, 3:0}
 
-        # Ornithoptères : nb de tours restants par secteur
-        self.ornithopteres = {0: 0, 1: 0, 2: 0, 3: 0}
+        self.spots_recolt_tour  = set()
+        self.spots_usines_tour  = set()
+        self.sabotages_tour     = set()
+        self.deplacements_tour  = set()
 
-        # Sabotages déclenchés ce tour (pour ne pas doubler)
-        self.sabotages_tour = set()
-
-    # ----------------------------------------------------------
-    #  Connexion
-    # ----------------------------------------------------------
+    # ── Connexion ───────────────────────────────────────────
 
     def connect(self):
         msg = self.client.recv_line()
         if msg != "NOM_EQUIPE":
-            raise RuntimeError(f"Message inattendu : {msg!r}")
+            raise RuntimeError(f"Inattendu : {msg!r}")
         rep = self.client.command(TEAM_NAME)
-        # "Bonjour RedHood vous êtes l'équipe |N"
         self.mon_id = str(rep.split('|')[-1].strip())
-        print(f"[RedHood] Connecté → joueur {self.mon_id}")
+        print(f"[RedHood] Joueur {self.mon_id}")
 
-    # ----------------------------------------------------------
-    #  Envoi d'une action/demande avec comptage
-    # ----------------------------------------------------------
+    # ── Quota d'actions ────────────────────────────────────
 
     def envoyer(self, msg):
-        """
-        Envoie une commande ou demande, compte dans le quota, retourne la réponse.
-        Retourne None si le quota est épuisé.
-        """
         if self.nb_actions >= MAX_ACTIONS:
-            print(f"[RedHood] ⚠ Quota atteint, impossible d'envoyer : {msg}")
             return None
         rep = self.client.command(msg)
         self.nb_actions += 1
         return rep
 
     def action_ok(self, msg):
-        """Envoie une commande et retourne True si le serveur répond OK."""
         rep = self.envoyer(msg)
         return rep is not None and rep.startswith("OK")
 
     def restantes(self):
-        """Actions encore disponibles ce tour."""
         return MAX_ACTIONS - self.nb_actions
 
-    # ----------------------------------------------------------
-    #  Utilitaires carte
-    # ----------------------------------------------------------
+    def budget(self):
+        """Épice utilisable au-dessus de la réserve."""
+        return max(0, self.epice - RESERVE)
+
+    # ── Utilitaires carte ───────────────────────────────────
 
     def mes_recolteuses(self):
-        return [
-            (x, y)
-            for y in range(ROWS)
-            for x in range(COLS)
-            if self.maps['obj'][y][x] == str(self.mon_id)
-        ]
+        return [(x,y) for y in range(ROWS) for x in range(COLS)
+                if self.maps['obj'][y][x] == str(self.mon_id)]
 
-    def mes_usines(self):
-        return [
-            (x, y)
-            for y in range(ROWS)
-            for x in range(COLS)
-            if self.maps['obj'][y][x] == 'U'
-        ]
+    def recolteuses_par_secteur(self):
+        count = {i:0 for i in range(4)}
+        for x,y in self.mes_recolteuses():
+            count[get_secteur_de_case(x,y)] += 1
+        return count
 
-    # ----------------------------------------------------------
-    #  Décrément ornithoptères (à appeler en début de tour)
-    # ----------------------------------------------------------
+    # ── Tick ornithoptères ──────────────────────────────────
 
-    def tick_ornithopteres(self):
+    def tick_ornis(self):
         for sec in range(4):
             if self.ornithopteres[sec] > 0:
                 self.ornithopteres[sec] -= 1
 
-    # ----------------------------------------------------------
-    #  Étape 0 : Récupérer l'état (ELEMENTS en 1er, puis DENSITE ou SCORES)
-    # ----------------------------------------------------------
+    # ══════════════════════════════════════════════════════════
+    #  ÉTAPE 0 — État du monde
+    #  Action 1 : ELEMENTS  (toujours)
+    #  Action 2 : DENSITE   (tour 1) | SCORES (tours ≥ 2)
+    # ══════════════════════════════════════════════════════════
 
-    def etape_recuperer_etat(self):
-        """
-        Tour 1  → ELEMENTS (action 1) + DENSITE   (action 2)
-        Tour N  → ELEMENTS (action 1) + SCORES     (action 2)
-        """
-        # --- Action 1 : ELEMENTS (toujours) ---
-        rep_elem = self.envoyer("ELEMENTS")
-        if rep_elem:
-            update_map("ELEMENTS", rep_elem, self.maps)
+    def etape_etat(self):
+        rep = self.envoyer("ELEMENTS")
+        if rep and len(rep) == 288:
+            update_map("ELEMENTS", rep, self.maps)
 
-        # --- Action 2 : DENSITE (tour 1) ou SCORES (tours suivants) ---
         if self.tour == 1:
-            rep_dns = self.envoyer("DENSITE")
-            if rep_dns:
-                update_map("DENSITE", rep_dns, self.maps)
-            # On initialise l'épice à la valeur par défaut (inconnue)
-            self.epice = 1_000_000  # valeur de départ selon les règles
+            rep = self.envoyer("DENSITE")
+            if rep and len(rep) == 288:
+                update_map("DENSITE", rep, self.maps)
+            self.epice = 1_000_000
             self.classement_ennemis = []
         else:
-            rep_scores = self.envoyer("SCORES")
-            if rep_scores:
-                self.epice             = get_my_spice(rep_scores, self.mon_id)
-                self.classement_ennemis = classify_threats_scores(rep_scores, self.mon_id)
+            rep = self.envoyer("SCORES")
+            if rep:
+                self.epice              = get_my_spice(rep, self.mon_id)
+                self.classement_ennemis = classify_threats_scores(rep, self.mon_id)
 
-    # ----------------------------------------------------------
-    #  Étape 1 : Warnings (si au moins 1 ornithoptère actif)
-    # ----------------------------------------------------------
+    # ══════════════════════════════════════════════════════════
+    #  ÉTAPE 1 — WARNING (si orni actif)
+    # ══════════════════════════════════════════════════════════
 
     def etape_warnings(self):
-        """Demande WARNING si au moins un orni est actif. Retourne liste de 4 statuts."""
-        if self.restantes() <= 1:  # garder au moins 1 action pour FINDETOUR
+        if self.restantes() < 2:
             return ['INCONNU'] * 4
         if not any(v > 0 for v in self.ornithopteres.values()):
             return ['INCONNU'] * 4
         rep = self.envoyer("WARNING")
-        if not rep:
-            return ['INCONNU'] * 4
+        if not rep: return ['INCONNU'] * 4
         parts = [p.strip() for p in rep.split('|')]
-        if len(parts) != 4:
-            return ['INCONNU'] * 4
-        return parts
+        return parts if len(parts) == 4 else ['INCONNU'] * 4
 
-    # ----------------------------------------------------------
-    #  Étape 2 : Ornithoptères
-    # ----------------------------------------------------------
+    # ══════════════════════════════════════════════════════════
+    #  ÉTAPE 2 — Ornithoptères
+    #  Déployer sur chaque secteur occupé sans surveillance.
+    # ══════════════════════════════════════════════════════════
 
     def etape_ornithopteres(self):
-        """
-        Déploie des ornithoptères dans tous les secteurs où on a des récolteuses
-        et où aucun orni n'est actif, dans la limite des actions restantes.
-        """
-        count = {i: 0 for i in range(4)}
-        for x, y in self.mes_recolteuses():
-            count[get_secteur_de_case(x, y)] += 1
-
+        count = self.recolteuses_par_secteur()
         for sec in sorted(count, key=lambda s: count[s], reverse=True):
-            if self.restantes() <= 1:
-                break
+            if self.restantes() < 2: break
             if count[sec] > 0 and self.ornithopteres[sec] == 0:
-                if self.action_ok(f"AJOUTERORNI|{sec}"):
-                    self.ornithopteres[sec] = 5
-                    print(f"[RedHood]  Orni → secteur {sec}")
+                if self.budget() >= COUT_ORNI:
+                    if self.action_ok(f"AJOUTERORNI|{sec}"):
+                        self.ornithopteres[sec] = 5
+                        self.epice -= COUT_ORNI
+                        print(f"[RedHood]  Orni sect={sec}")
 
-    # ----------------------------------------------------------
-    #  Étape 3 : Évacuation d'urgence
-    # ----------------------------------------------------------
+    # ══════════════════════════════════════════════════════════
+    #  ÉTAPE 3 — Évacuation d'urgence (DANGER détecté)
+    # ══════════════════════════════════════════════════════════
 
     def etape_evacuation(self, alertes):
-        """Déplace les récolteuses en DANGER vers des zones sûres."""
         ordres = evacuation_protocol(self.maps, self.mon_id, alertes)
-        for ordre in ordres:
-            if self.restantes() <= 1:
-                break
-            cmd = (f"DEPLACER|{ordre['orig_y']}|{ordre['orig_x']}"
-                   f"|{ordre['dest_y']}|{ordre['dest_x']}")
+        for o in ordres:
+            if self.restantes() < 2: break
+            if (o['orig_x'], o['orig_y']) in self.deplacements_tour: continue
+            cmd = (f"DEPLACER|{o['orig_y']}|{o['orig_x']}"
+                   f"|{o['dest_y']}|{o['dest_x']}")
             if self.action_ok(cmd):
-                self.maps['obj'][ordre['orig_y']][ordre['orig_x']] = 'X'
-                self.maps['obj'][ordre['dest_y']][ordre['dest_x']] = str(self.mon_id)
-                print(f"[RedHood]  Fuite ({ordre['orig_x']},{ordre['orig_y']})"
-                      f" → ({ordre['dest_x']},{ordre['dest_y']})")
+                self.maps['obj'][o['orig_y']][o['orig_x']] = 'X'
+                self.maps['obj'][o['dest_y']][o['dest_x']] = str(self.mon_id)
+                self.deplacements_tour.add((o['orig_x'], o['orig_y']))
+                self.spots_recolt_tour.add((o['dest_x'], o['dest_y']))
+                print(f"[RedHood]  Évac ({o['orig_x']},{o['orig_y']})"
+                      f"→({o['dest_x']},{o['dest_y']})")
 
-    # ----------------------------------------------------------
-    #  Étape 4 : Placement de récolteuses
-    # ----------------------------------------------------------
+    # ══════════════════════════════════════════════════════════
+    #  ÉTAPE 4 — Déplacements optimisants
+    #  v2 : actifs dès le tour PHASE_DEPLACEMENTS (6) au lieu de 16.
+    #  Seuil move relevé à 3.0 pour éviter les micro-réoptimisations inutiles.
+    # ══════════════════════════════════════════════════════════
 
-    def etape_recolteuses(self):
-        """
-        Place des récolteuses sur les meilleurs spots disponibles.
-        On en pose autant que le budget et les actions permettent,
-        en diversifiant les secteurs (max 3 par secteur par tour).
-        """
-        if self.epice < COUT_ACTION:
-            return
+    def etape_deplacements(self):
+        if self.restantes() < 3: return
+        if self.tour < PHASE_DEPLACEMENTS: return
 
-        result         = find_best_locations(self.maps, top_n=50)
-        spots          = result["top_spots"]
-        poses_par_sec  = {0: 0, 1: 0, 2: 0, 3: 0}
-        MAX_PAR_SECTEUR = 3
+        max_moves = self.restantes() // 2 if self.tour < PHASE_FINALE else self.restantes() - 1
 
-        for spot in spots:
-            if self.restantes() <= 1 or self.epice < COUT_ACTION:
-                break
-            x, y = spot["coords"]
-            if self.maps['obj'][y][x] != 'X':
-                continue
-            sec = spot["secteur"]
-            if poses_par_sec[sec] >= MAX_PAR_SECTEUR:
-                continue
-            if self.action_ok(f"AJOUTERRECOLTEUSE|{y}|{x}"):
-                self.maps['obj'][y][x] = str(self.mon_id)
-                self.epice -= COUT_ACTION
-                poses_par_sec[sec] += 1
-                print(f"[RedHood]  Récolteuse en ({x},{y}) sect={sec}"
-                      f" rendement={spot['rendement']}")
+        candidats = find_best_moves(self.maps, self.mon_id, top_n=max_moves)
 
-    # ----------------------------------------------------------
-    #  Étape 5 : Usines
-    # ----------------------------------------------------------
+        for c in candidats:
+            if self.restantes() < 2: break
+            ox, oy = c['orig']
+            dx, dy = c['dest']
+            if (ox, oy) in self.deplacements_tour: continue
+            if self.maps['obj'][oy][ox] != str(self.mon_id): continue
+            if self.maps['obj'][dy][dx] != 'X': continue
+            if self.action_ok(f"DEPLACER|{oy}|{ox}|{dy}|{dx}"):
+                self.maps['obj'][oy][ox] = 'X'
+                self.maps['obj'][dy][dx] = str(self.mon_id)
+                self.deplacements_tour.add((ox, oy))
+                self.spots_recolt_tour.add((dx, dy))
+                print(f"[RedHood]  Move ({ox},{oy})→({dx},{dy}) gain={c['gain']:.1f}")
+
+    # ══════════════════════════════════════════════════════════
+    #  ÉTAPE 5 — Usines
+    #  v2 : posées uniquement si allies > ennemis dans le rayon 2
+    #  (sinon on booste les adversaires gratuitement).
+    # ══════════════════════════════════════════════════════════
 
     def etape_usines(self):
-        """
-        Construit une usine si rentable et qu'on a ≥ 3 récolteuses.
-        On peut en poser plusieurs par tour si le budget le permet.
-        """
-        if len(self.mes_recolteuses()) < 3:
-            return
+        if len(self.mes_recolteuses()) < 2: return
 
-        for _ in range(2):  # au plus 2 usines par tour
-            if self.restantes() <= 1 or self.epice < COUT_ACTION:
-                break
-            spot = find_best_factory_spot(self.maps, self.mon_id)
+        for _ in range(2):
+            if self.restantes() < 2: break
+            if self.budget() < COUT_USINE: break
+            spot = find_best_factory_spot(
+                self.maps, self.mon_id, exclues=self.spots_usines_tour
+            )
             if spot["coords"] is None or spot["score_rentabilite"] <= 0:
                 break
             x, y = spot["coords"]
             if self.action_ok(f"AJOUTERUSINE|{y}|{x}"):
                 self.maps['obj'][y][x] = 'U'
-                self.epice -= COUT_ACTION
-                print(f"[RedHood]  Usine en ({x},{y}) score={spot['score_rentabilite']}")
+                self.epice -= COUT_USINE
+                self.spots_usines_tour.add((x, y))
+                print(f"[RedHood]  Usine ({x},{y}) score={spot['score_rentabilite']:.0f}")
 
-    # ----------------------------------------------------------
-    #  Étape 6 : Sabotages
-    # ----------------------------------------------------------
+    # ══════════════════════════════════════════════════════════
+    #  ÉTAPE 6 — Nouvelles récolteuses
+    #  v2 : 3 récolteuses/tour en expansion (au lieu de 2).
+    #  Diversification : max 1 par secteur par tour en expansion.
+    # ══════════════════════════════════════════════════════════
+
+    def etape_recolteuses(self, max_supplementaire=0):
+        if self.tour >= PHASE_FINALE: return
+        if self.budget() < COUT_RECOLTEUSE or self.restantes() < 2: return
+
+        SEUIL_MIN_GAIN = 4.0   # légèrement abaissé pour être plus agressif
+
+        # v2 : 3/tour en expansion, 5/tour en exploitation, +bonus si actions libres
+        max_ce_tour      = 3 if self.tour < PHASE_EXPLOITATION else 5
+        max_ce_tour     += max_supplementaire
+        max_par_sec_tour = 1 if self.tour < PHASE_EXPLOITATION else 2
+
+        posees         = 0
+        posees_par_sec = {0:0, 1:0, 2:0, 3:0}
+        count_global   = self.recolteuses_par_secteur()
+
+        result = find_best_locations(
+            self.maps, self.mon_id,
+            top_n=60, exclues=self.spots_recolt_tour
+        )
+
+        for spot in result["top_spots"]:
+            if posees >= max_ce_tour: break
+            if self.restantes() < 2 or self.budget() < COUT_RECOLTEUSE: break
+
+            x, y  = spot["coords"]
+            sec   = spot["secteur"]
+            gain  = spot["gain"]
+
+            if gain < SEUIL_MIN_GAIN: break
+
+            if self.maps['obj'][y][x] != 'X': continue
+            if (x, y) in self.spots_recolt_tour: continue
+            if posees_par_sec[sec] >= max_par_sec_tour: continue
+            if count_global[sec] >= MAX_RECOLT_PAR_SECTEUR: continue
+
+            # Diversification forcée en expansion : 1 seul par secteur par tour
+            if self.tour < PHASE_EXPLOITATION and posees_par_sec[sec] >= 1:
+                continue
+
+            if self.action_ok(f"AJOUTERRECOLTEUSE|{y}|{x}"):
+                self.maps['obj'][y][x] = str(self.mon_id)
+                self.epice -= COUT_RECOLTEUSE
+                self.spots_recolt_tour.add((x, y))
+                posees += 1
+                posees_par_sec[sec] += 1
+                count_global[sec]   += 1
+                print(f"[RedHood]  Recolt ({x},{y}) sec={sec} gain={gain:.1f}")
+
+    # ══════════════════════════════════════════════════════════
+    #  ÉTAPE 7 — Sabotages
+    #  v2 : dès le tour PHASE_SABOTAGE (25), budget_min plus souple en finale.
+    # ══════════════════════════════════════════════════════════
 
     def etape_sabotage(self):
-        """
-        Saboter stratégiquement si on est en position solide.
-        Budget : on garde au moins 10 000 de marge pour les récolteuses.
-        """
-        if self.epice < COUT_ACTION * 3:
-            return
-        if len(self.mes_recolteuses()) < 3:
-            return
-        if not self.classement_ennemis:
-            return
+        if self.tour < PHASE_SABOTAGE: return
+        if not self.classement_ennemis: return
+        if len(self.mes_recolteuses()) < 2: return
 
-        cibles = strategic_sabotage_advance(self.maps, self.mon_id, self.classement_ennemis)
+        max_sab    = 1 if self.tour < PHASE_FINALE else 2
+        # v2 : budget_min plus agressif en finale (1× au lieu de 3×)
+        budget_min = COUT_SABOTAGE * 2 if self.tour < PHASE_FINALE else COUT_SABOTAGE
+
+        if self.budget() < budget_min: return
+
+        cibles     = strategic_sabotage_advance(
+            self.maps, self.mon_id, self.classement_ennemis
+        )
+        sabs_poses = 0
         for cible in cibles:
-            if self.restantes() <= 1 or self.epice < COUT_ACTION:
-                break
+            if sabs_poses >= max_sab: break
+            if self.restantes() < 2 or self.budget() < COUT_SABOTAGE: break
             sec = cible["secteur"]
-            if sec in self.sabotages_tour:
-                continue
+            if sec in self.sabotages_tour: continue
             if self.action_ok(f"SABOTER|{sec}"):
-                self.epice -= COUT_ACTION
+                self.epice -= COUT_SABOTAGE
                 self.sabotages_tour.add(sec)
+                sabs_poses += 1
                 print(f"[RedHood]  Sabotage sect={sec}"
                       f" score={cible['score_cible']:.1f}"
-                      f" (leader_tué={cible['dont_leader']})")
+                      f" (leader={cible['dont_leader']})")
 
-    # ----------------------------------------------------------
-    #  Boucle de jeu
-    # ----------------------------------------------------------
+    # ══════════════════════════════════════════════════════════
+    #  ÉTAPE 8 — Récupération d'actions restantes
+    #  v2 : si on a encore des actions et du budget, on pose des récolteuses
+    #  supplémentaires plutôt que de laisser le quota se perdre.
+    # ══════════════════════════════════════════════════════════
+
+    def etape_recuperation(self):
+        if self.tour >= PHASE_FINALE: return
+        actions_libres = self.restantes() - 1  # garder 1 pour FINDETOUR
+        if actions_libres <= 0: return
+        if self.budget() < COUT_RECOLTEUSE: return
+        # On tente des récolteuses bonus avec les actions restantes
+        extras = actions_libres // 1  # chaque récolteuse coûte 1 action
+        if extras > 0:
+            self.etape_recolteuses(max_supplementaire=extras)
+
+    # ══════════════════════════════════════════════════════════
+    #  Boucle principale
+    # ══════════════════════════════════════════════════════════
 
     def play_turn(self, numero_tour):
-        self.tour        = numero_tour
-        self.nb_actions  = 0
-        self.sabotages_tour = set()
+        self.tour       = numero_tour
+        self.nb_actions = 0
+        self.spots_recolt_tour  = set()
+        self.spots_usines_tour  = set()
+        self.sabotages_tour     = set()
+        self.deplacements_tour  = set()
 
-        print(f"\n{'='*50}")
-        print(f"  RedHood | Tour {numero_tour} | Joueur {self.mon_id}")
-        print(f"{'='*50}")
+        phase = ("EXPANSION"    if numero_tour < PHASE_EXPLOITATION else
+                 "FINALE"       if numero_tour >= PHASE_FINALE else
+                 "EXPLOITATION")
 
-        # Décrémenter les ornithoptères
-        self.tick_ornithopteres()
+        print(f"\n{'='*55}")
+        print(f"  RedHood v2 | Tour {numero_tour} | J{self.mon_id} | {phase}")
+        print(f"{'='*55}")
 
-        # 1. État du monde (actions 1 et 2)
-        self.etape_recuperer_etat()
-        print(f"  Épice={self.epice} | "
-              f"Récolteuses={len(self.mes_recolteuses())} | "
-              f"Actions restantes={self.restantes()}")
+        self.tick_ornis()
 
-        # 2. Warnings vers (action 3 si nécessaire)
+        # 1. État (actions 1-2)
+        self.etape_etat()
+        print(f"  Épice={self.epice:,}  Récolt.={len(self.mes_recolteuses())}"
+              f"  Restantes={self.restantes()}")
+
+        # 2. Warnings (action 3 si orni actif)
         alertes = self.etape_warnings()
-        print(f"  Alertes vers : {alertes}")
+        if any(a != 'INCONNU' for a in alertes):
+            print(f"  Alertes : {alertes}")
 
-        # 3. Ornithoptères (protège avant d'évacuer)
+        # 3. Ornithoptères
         self.etape_ornithopteres()
 
-        # 4. Évacuation urgente
+        # 4. Évacuation urgente (DANGER)
         self.etape_evacuation(alertes)
 
-        # 5. Nouvelles récolteuses
-        self.etape_recolteuses()
+        # 5. Déplacements optimisants (gratuits, dès tour 6)
+        self.etape_deplacements()
 
-        # 6. Usines
+        # 6. Usines (avant récolteuses pour prioriser le budget)
         self.etape_usines()
 
-        # 7. Sabotages
+        # 7. Récolteuses
+        self.etape_recolteuses()
+
+        # 8. Sabotages
         self.etape_sabotage()
 
-        # 8. Fin de tour (obligatoire — ne compte PAS dans le quota de 15)
+        # 9. Récupération d'actions restantes → récolteuses bonus
+        self.etape_recuperation()
+
+        # 10. Fin de tour (hors quota)
         self.client.command("FINDETOUR")
 
-        print(f"  → Actions utilisées ce tour : {self.nb_actions}/{MAX_ACTIONS}")
+        print(f"  → {self.nb_actions}/{MAX_ACTIONS} actions | épice≈{self.epice:,}")
 
     def run(self):
         self.connect()
         while True:
             msg = self.client.recv_line(timeout=60)
             if not msg:
-                print("[RedHood] Pas de message — fin de partie.")
+                print("[RedHood] Fin de partie.")
                 break
             if msg.startswith("DEBUT_TOUR"):
                 try:
-                    numero_tour = int(msg.split('|')[1])
+                    num = int(msg.split('|')[1])
                 except (IndexError, ValueError):
-                    numero_tour = self.tour + 1
-                self.play_turn(numero_tour)
+                    num = self.tour + 1
+                self.play_turn(num)
             else:
-                print(f"[RedHood] Message inconnu : {msg!r}")
+                print(f"[RedHood] Inconnu : {msg!r}")
 
 
-# ==============================================================
-#  Point d'entrée
 # ==============================================================
 
 if __name__ == "__main__":
@@ -395,5 +490,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n[RedHood] Arrêt.")
     except Exception as e:
-        print(f"[RedHood] Erreur fatale : {e}")
+        print(f"[RedHood] Erreur : {e}")
         raise
