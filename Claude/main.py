@@ -113,12 +113,8 @@ def main():
             log.debug(f"← {msg!r}")
             if msg == "NOM_EQUIPE":
                 net.send(team_name)
-            elif msg.strip().isdigit():
-                # Réponse directe: juste le player_id (ex: "2")
-                player_id = int(msg.strip())
-                log.info(f"Inscrit ! Player ID: {player_id}")
-            elif msg.upper().startswith("EQUIPE|") or msg.upper().startswith("BIENVENUE|"):
-                # Réponse type "EQUIPE|SpiceHunter|2"
+            elif "quipe" in msg and "|" in msg and not msg.startswith("DEBUT_TOUR"):
+                # "Vous êtes l'équipe|1"
                 try:
                     player_id = int(msg.split('|')[-1].strip())
                     log.info(f"Inscrit ! Player ID: {player_id}")
