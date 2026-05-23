@@ -120,4 +120,62 @@ class SpiceBotUltime:
 
         # --- PRIORITÉ 2 : INTELLIGENCE (Déployer des ornithoptères) ---
         # Si on a des unités dans un secteur INCONNU, on pose un radar
-        secteurs_occupes = {get_sect
+        secteurs_occupes = {get_secteur(l, c) for l, c in mes_recolteuses}
+        for s in secteurs_occupes:
+            if alertes_vers[s] == "INCONNU":
+                print(f"  [Radar] Déploiement d'un ornithoptère secteur {s}")
+                self.envoyer_action(f"AJOUTERORNI|{s}")
+
+        # --- PRIORITÉ 3 : RIPOSTE (Tit-for-Tat) ---
+        # Si un ennemi est trop proche de nous (distance <= 2), on l'attaque en lui volant sa place
+        for l, c in mes_recolteuses:
+            for el, ec in ennemis:
+                if distance_rapide(l, c, el, ec) <= 2:
+                    print(f"  [Riposte] Ennemi détecté en ({el},{ec}). Blocage en cours !")
+                    # Cherche une case de haute densité juste à côté de l'ennemi
+                    meilleure_riposte = None
+                    max_d = -1
+                    for dl, dc in [(-1,0), (1,0), (0,-1), (0,1), (-1,-1), (1,1)]:
+                        rl, rc = el + dl, ec + dc
+                        if (rl, rc) in self.plateau and self.plateau[(rl, rc)]['element'] == 'X':
+                            if self.plateau[(rl, rc)]['densite'] > max_d:
+                                max_d = self.plateau[(rl, rc)]['densite']
+                                meilleure_riposte = (rl, rc)
+                    
+                    if meilleure_riposte:
+                        self.envoyer_action(f"DEPLACER|{l}|{c}|{meilleure_riposte[0]}|{meilleure_riposte[1]}")
+
+        # --- PRIORITÉ 4 : EXPANSION (Farming Naïf) ---
+        # Tant qu'on a des actions, on place de nouvelles récolteuses sur l'épice dense (Loin des vers et ennemis)
+        cases_libres = [(l, c) for (l, c), data in self.plateau.items() if data['element'] == 'X']
+        # On trie par densité décroissante
+        cases_libres.sort(key=lambda coord: self.plateau[coord]['densite'], reverse=True)
+
+        for l, c in cases_libres:
+            if self.actions_restantes <= 0:
+                break
+                
+            secteur = get_secteur(l, c)
+            if alertes_vers[secteur] == "DANGER":
+                continue # On ne spawn pas dans la gueule du ver
+                
+            # Vérifier qu'il n'y a pas d'ennemis juste à côté pour éviter les embrouilles
+            ennemi_proche = False
+            for el, ec in ennemis:
+                if distance_rapide(l, c, el, ec) <= 2:
+                    ennemi_proche = True
+                    break
+            
+            if not ennemi_proche:
+                print(f"  [Farming] Achat récolteuse sur case riche en ({l},{c})")
+                self.envoyer_action(f"AJOUTERRECOLTEUSE|{l}|{c}")
+
+if __name__ == "__main__":
+    nom_equipe = sys.argv[1] if len(sys.argv) > 1 else "Les_Maitres_Du_Code"
+    bot = SpiceBotUltime(equipe=nom_equipe)
+    try:
+        bot.connecter()
+    except KeyboardInterrupt:
+        print("\n[!] Arrêt du Bot.")
+    except Exception as e:
+        print(f"[X] Erreur critique : {e}")
