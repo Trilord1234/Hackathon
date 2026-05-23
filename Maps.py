@@ -1,400 +1,410 @@
-maps_obj = [
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 0
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 1
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 2
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 3
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 4
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 5
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 6
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 7
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 8
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 9
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 10
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 11
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 12
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 13
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 14
-    ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X']  # Ligne 15
-]
+# ============================================================
+#  Maps.py  —  Utilitaires de carte pour For The Spice
+# ============================================================
 
-maps_dns = [
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 0
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 1
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 2
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 3
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 4
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 5
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 6
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 7
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 8
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 9
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 10
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 11
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 12
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 13
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 14
-    ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1']  # Ligne 15
-]
+# --------------- Structures de données initiales -----------
 
+maps_obj = [['X'] * 18 for _ in range(16)]
+maps_dns = [['1'] * 18 for _ in range(16)]
 
 maps = {
     'obj': maps_obj,
     'dns': maps_dns
 }
 
+# --------------- Voisinage hexagonal -----------------------
+
+def get_hex_neighbors(x, y):
+    """
+    Renvoie les coordonnées (col, ligne) des 6 voisins hexagonaux de (x, y).
+    
+    La grille utilise un décalage basé sur la parité de la LIGNE (y) :
+      - Si y est pair  : les voisins diagonaux sont à  (x-1) à gauche
+      - Si y est impair: les voisins diagonaux sont à  (x+1) à droite
+    
+    Offsets (dx, dy) pour les 6 directions hex :
+      pair  : E(+1,0), O(-1,0), NE(0,-1), NO(-1,-1), SE(0,+1), SO(-1,+1)
+      impair: E(+1,0), O(-1,0), NE(+1,-1), NO(0,-1),  SE(+1,+1), SO(0,+1)
+    """
+    if y % 2 == 0:
+        offsets = [(1, 0), (-1, 0), (0, -1), (-1, -1), (0, 1), (-1, 1)]
+    else:
+        offsets = [(1, 0), (-1, 0), (1, -1), (0, -1),  (1, 1),  (0, 1)]
+
+    neighbors = []
+    for dx, dy in offsets:
+        nx, ny = x + dx, y + dy
+        if 0 <= nx < 18 and 0 <= ny < 16:
+            neighbors.append((nx, ny))
+    return neighbors
+
+
+def get_hex_neighbors_radius2(x, y):
+    """
+    Renvoie toutes les cases dans un rayon de 2 cases (hex) autour de (x, y),
+    sans inclure (x, y) lui-même.
+    """
+    r1 = set(get_hex_neighbors(x, y))
+    r2 = set()
+    for vx, vy in r1:
+        for nx, ny in get_hex_neighbors(vx, vy):
+            r2.add((nx, ny))
+    # Union des deux rayons, sans la case centrale
+    all_cells = r1 | r2
+    all_cells.discard((x, y))
+    return all_cells
+
+
+# --------------- Fonctions utilitaires ---------------------
+
 def get_secteur(choix_matrice, num, maps):
     """
-    Renvoie la liste des coordonnées (ligne, colonne) des cases d'un secteur donné.
+    Renvoie la sous-matrice (liste de listes) d'un secteur donné.
 
-    choix_matrice : 'obj' (pour les éléments) ou 'dns' (pour les densités)
-    maps : dictionnaire de la carte du jeu (ex: {'obj': [...], 'dns': [...]})
-    num: numéro du secteur (0, 1, 2 ou 3).
-    return: Matrice du secteur choisie.
+    choix_matrice : 'obj' ou 'dns'
+    num           : 0, 1, 2 ou 3
+    maps          : dict {'obj': ..., 'dns': ...}
     """
-
     carte_active = maps[choix_matrice]
 
     limites_secteurs = {
-        0: (0, 8, 0, 9),    # Lignes 0 à 7, colonnes 0 à 8 [cite: 57]
-        1: (0, 8, 9, 18),   # Lignes 0 à 7, colonnes 9 à 17 [cite: 57]
-        2: (8, 16, 0, 9),   # Lignes 8 à 15, colonnes 0 à 8 [cite: 57]
-        3: (8, 16, 9, 18)   # Lignes 8 à 15, colonnes 9 à 17 [cite: 57]
+        0: (0, 8, 0, 9),   # lignes 0-7,  colonnes 0-8
+        1: (0, 8, 9, 18),  # lignes 0-7,  colonnes 9-17
+        2: (8, 16, 0, 9),  # lignes 8-15, colonnes 0-8
+        3: (8, 16, 9, 18)  # lignes 8-15, colonnes 9-17
     }
-    
+
     if num not in limites_secteurs:
         raise ValueError("Le numéro du secteur doit être 0, 1, 2 ou 3.")
-        
+
     r_min, r_max, c_min, c_max = limites_secteurs[num]
-    
-    mini_matrice = [ligne[c_min:c_max] for ligne in carte_active[r_min:r_max]]
-    
-    return mini_matrice 
+    return [ligne[c_min:c_max] for ligne in carte_active[r_min:r_max]]
 
-def get_adjacente(choix_matrice, x, y, maps):
-    """
-    Renvoie une mini-matrice 3x3 centrée sur (x, y) avec ses voisins hexagonaux.
-    
-    choix_matrice : 'obj' ou 'dns'
-    x : colonne (0 à 17)
-    y : ligne (0 à 15)
-    maps : dictionnaire de la carte du jeu
-    return : mini_matrice
-    """
 
-    carte_active = maps[choix_matrice]
-    lignes_max = 16
-    cols_max = 18
+def get_secteur_de_case(x, y):
+    """Retourne le numéro de secteur (0-3) pour une case (col x, ligne y)."""
+    if y < 8 and x < 9:   return 0
+    if y < 8 and x >= 9:  return 1
+    if y >= 8 and x < 9:  return 2
+    return 3
 
-    def get_case(col, lig):
-        if 0 <= col < cols_max and 0 <= lig < lignes_max:
-            return carte_active[lig][col]
-        return None
-
-    mini_matrice = [
-        [get_case(x-1, y-1), get_case(x, y-1), None],             # Ligne du haut
-        [get_case(x-1, y),   get_case(x, y),   get_case(x+1, y)], # Ligne centrale
-        [get_case(x-1, y+1), get_case(x, y+1), None]              # Ligne du bas
-    ]
-
-    return mini_matrice
-
-def analyze_competition_spice(x, y, maps, mon_id):
-    """
-    Analyse une case pour voir quelles récolteuses viennent pomper l'épice,
-    et récupère automatiquement la densité de cette case.
-    
-    x : colonne de la case ciblée (0 à 17)
-    y : ligne de la case ciblée (0 à 15)
-    maps : dictionnaire contenant les deux cartes {'obj': ..., 'dns': ...}
-    mon_id : string représentant le numéro de ton IA (ex: '0')
-    """
-
-    carte_obj = maps['obj']
-    carte_dns = maps['dns']
-
-    lignes_max = 16
-    cols_max = 18
-
-    voisins_coords = [
-        (x, y),       (x+1, y),     (x-1, y),
-        (x, y+1),     (x, y-1),     (x-1, y+1),   (x-1, y-1)
-    ]
-
-    resultat = {
-        "case_epice": (x, y),
-        "densite_epice": int(carte_dns[y][x]),
-        "recolteuses_adverses": [], 
-        "recolteuses_alliees": [],  
-        "usine_sur_case": False,    
-        "diviseur_recolte": 0       
-    }
-
-    if carte_obj[y][x] == 'U':
-        resultat["usine_sur_case"] = True
-
-    for vx, vy in voisins_coords:
-        if 0 <= vx < cols_max and 0 <= vy < lignes_max:
-            element = carte_obj[vy][vx]
-
-            if element.isdigit():
-                resultat["diviseur_recolte"] += 1
-                
-                if element == str(mon_id):
-                    resultat["recolteuses_alliees"].append((vx, vy))
-                else:
-                    resultat["recolteuses_adverses"].append({
-                        "coords": (vx, vy), 
-                        "id_joueur": element
-                    })
-                    
-    return resultat
 
 def update_map(type_commande, donnees_serveur, maps):
     """
-    Met à jour la carte 'obj' ou 'dns' à partir de la chaîne de 288 caractères 
+    Met à jour la carte 'obj' ou 'dns' à partir de la chaîne de 288 caractères
     renvoyée par le serveur.
-    
-    type_commande : 'DENSITE' ou 'ELEMENTS'
-    donnees_serveur : string de 288 caractères reçue du serveur
-    maps : dictionnaire contenant tes matrices {'obj': [...], 'dns': [...]}
-    return : Le dictionnaire maps mis à jour
+
+    type_commande  : 'DENSITE' ou 'ELEMENTS'
+    donnees_serveur: string de 288 caractères
+    maps           : dict {'obj': ..., 'dns': ...}
     """
-
     if len(donnees_serveur) != 288:
-        print(f"Erreur : Les données reçues font {len(donnees_serveur)} caractères au lieu de 288.")
+        print(f"[update_map] Erreur : {len(donnees_serveur)} caractères reçus (attendu 288).")
         return maps
-    if type_commande == "DENSITE":
-        cle_carte = 'dns'
-    elif type_commande == "ELEMENTS":
-        cle_carte = 'obj'
-    else:
-        print("Erreur : Type de commande inconnu. Utilisez 'DENSITE' ou 'ELEMENTS'.")
-        return maps
-        
-    carte_active = maps[cle_carte]
 
+    cle = {'DENSITE': 'dns', 'ELEMENTS': 'obj'}.get(type_commande)
+    if cle is None:
+        print(f"[update_map] Type de commande inconnu : {type_commande}")
+        return maps
+
+    carte = maps[cle]
     for y in range(16):
         for x in range(18):
-            index_1d = y * 18 + x
-            carte_active[y][x] = donnees_serveur[index_1d]
-
+            carte[y][x] = donnees_serveur[y * 18 + x]
     return maps
 
-def apply_bonus_factories(maps):
+
+def get_my_spice(reponse_scores, mon_id):
     """
-    Parcourt la carte des objets pour trouver les usines ('U').
-    Double la densité d'épice dans un rayon de 2 cases sur la carte des densités.
-    Le bonus ne se cumule pas et les cases contenant une usine tombent à 0 d'épice.
+    Extrait le stock d'épice du joueur mon_id depuis la réponse SCORES.
+    reponse_scores : ex. "995000|1002000|980000|990000"
     """
-    carte_obj = maps['obj']
-    carte_dns = maps['dns']
-    lignes_max = 16
-    cols_max = 18
+    return int(reponse_scores.split('|')[int(mon_id)])
 
-    cases_a_booster = set()
-    
-    def get_voisins(cx, cy):
-        voisins = []
-        offsets = [(1, 0), (-1, 0), (0, 1), (0, -1), (-1, 1), (-1, -1)]
-        for dx, dy in offsets:
-            nx, ny = cx + dx, cy + dy
-            if 0 <= nx < cols_max and 0 <= ny < lignes_max:
-                voisins.append((nx, ny))
-        return voisins
-
-    for y in range(lignes_max):
-        for x in range(cols_max):
-            if carte_obj[y][x] == 'U':
-                
-                carte_dns[y][x] = '0'
-                
-                voisins_d1 = get_voisins(x, y)
-                for v1x, v1y in voisins_d1:
-                    
-                    if carte_obj[v1y][v1x] != 'U':
-                        cases_a_booster.add((v1x, v1y))
-                    
-                    voisins_d2 = get_voisins(v1x, v1y)
-                    for v2x, v2y in voisins_d2:
-                        
-                        if carte_obj[v2y][v2x] != 'U':
-                            cases_a_booster.add((v2x, v2y))
-                            
-    for bx, by in cases_a_booster:
-        valeur_actuelle = int(carte_dns[by][bx])
-        nouvelle_valeur = valeur_actuelle * 2
-        carte_dns[by][bx] = str(nouvelle_valeur)
-        
-    return maps
-
-def find_best_locations(maps, top_n=10):
-    """
-    Analyse la carte pour trouver les meilleures cases libres ('X') où placer une récolteuse.
-    Calcule le rendement potentiel (case + 6 voisines) et établit un classement des secteurs.
-    
-    maps : dictionnaire des cartes 'obj' et 'dns'
-    top_n : le nombre de meilleures positions à retenir (10 par défaut)
-    """
-    carte_obj = maps['obj']
-    carte_dns = maps['dns']
-    lignes_max = 16
-    cols_max = 18
-    
-    tous_les_emplacements = []
-    for y in range(lignes_max):
-        for x in range(cols_max):
-            
-            if carte_obj[y][x] == 'X':
-                
-                zone_recolte = [
-                    (x, y),       (x+1, y),     (x-1, y),
-                    (x, y+1),     (x, y-1),     (x-1, y+1),   (x-1, y-1)
-                ]
-                
-                rendement_total = 0
-                
-                for vx, vy in zone_recolte:
-                    if 0 <= vx < cols_max and 0 <= vy < lignes_max:
-                        rendement_total += int(carte_dns[vy][vx])
-                
-                if y < 8 and x < 9:
-                    secteur = 0
-                elif y < 8 and x >= 9:
-                    secteur = 1
-                elif y >= 8 and x < 9:
-                    secteur = 2
-                else:
-                    secteur = 3
-                    
-                # On sauvegarde cette position
-                tous_les_emplacements.append({
-                    "coords": (x, y),
-                    "rendement": rendement_total,
-                    "secteur": secteur
-                })
-
-    # 2. On trie la liste du plus grand rendement au plus petit
-    # La fonction lambda indique qu'on trie en se basant sur la clé 'rendement' du dictionnaire
-    tous_les_emplacements.sort(key=lambda item: item['rendement'], reverse=True)
-    
-    # On garde seulement le Top 10
-    top_emplacements = tous_les_emplacements[:top_n]
-    
-    # 3. Évaluation et classement des secteurs basés sur ce Top 10
-    stats_secteurs = {0: {"count": 0, "score_total": 0}, 1: {"count": 0, "score_total": 0}, 
-                      2: {"count": 0, "score_total": 0}, 3: {"count": 0, "score_total": 0}}
-    
-    for place in top_emplacements:
-        sec = place["secteur"]
-        stats_secteurs[sec]["count"] += 1
-        stats_secteurs[sec]["score_total"] += place["rendement"]
-        
-    # On crée une liste pour pouvoir la trier
-    classement_secteurs = []
-    for sec_id, stats in stats_secteurs.items():
-        classement_secteurs.append({
-            "secteur": sec_id,
-            "nombre_de_spots": stats["count"],
-            "score_cumule": stats["score_total"]
-        })
-        
-    # On trie les secteurs : d'abord par le nombre de bons spots, puis par le score cumulé pour départager
-    classement_secteurs.sort(key=lambda s: (s["nombre_de_spots"], s["score_cumule"]), reverse=True)
-
-    # On retourne le tout dans un dictionnaire propre
-    return {
-        "top_spots": top_emplacements,
-        "classement_secteurs": classement_secteurs
-    }
 
 def classify_threats_scores(reponse_scores, mon_id):
     """
-    Analyse la chaîne renvoyée par la demande SCORES pour identifier
-    quel adversaire est actuellement en tête.
+    Retourne la liste des adversaires triée par score décroissant.
+    [{"id_joueur": "2", "score": 1002000}, ...]
     """
+    ennemis = []
+    for idx, val in enumerate(reponse_scores.split('|')):
+        if val.strip() and str(idx) != str(mon_id):
+            ennemis.append({"id_joueur": str(idx), "score": int(val)})
+    ennemis.sort(key=lambda e: e["score"], reverse=True)
+    return ennemis
 
-    scores_bruts = reponse_scores.split('|')
-    classement_ennemis = []
 
-    for joueur_id, score_str in enumerate(scores_bruts):
-        if score_str.strip() == "":
-            continue
+# --------------- Analyse de la carte -----------------------
 
-        score = int(score_str)
-        
-        if str(joueur_id) != str(mon_id):
-            classement_ennemis.append({
-                "id_joueur": str(joueur_id),
-                "score": score
+def apply_bonus_factories(maps):
+    """
+    Calcule la carte de densité *effective* en tenant compte des usines.
+    - Une case usine produit 0 épice.
+    - Une usine double la densité des cases dans un rayon de 2 (bonus non cumulable).
+    
+    IMPORTANT : ne modifie PAS maps['dns'] en place — retourne une nouvelle
+    matrice dns_effective pour ne pas corrompre les données brutes du serveur.
+    """
+    carte_obj = maps['obj']
+    carte_dns = maps['dns']
+
+    # Copie de travail (valeurs entières)
+    dns_eff = [[int(carte_dns[y][x]) for x in range(18)] for y in range(16)]
+
+    # Marquer les cases à booster (union des rayons 2 de toutes les usines)
+    cases_boostees = set()
+    for y in range(16):
+        for x in range(18):
+            if carte_obj[y][x] == 'U':
+                dns_eff[y][x] = 0  # la case usine elle-même ne produit rien
+                for nx, ny in get_hex_neighbors_radius2(x, y):
+                    if carte_obj[ny][nx] != 'U':
+                        cases_boostees.add((nx, ny))
+
+    for bx, by in cases_boostees:
+        dns_eff[by][bx] *= 2  # bonus x2, non cumulable (set = une seule fois par case)
+
+    return dns_eff  # matrice 16x18 d'entiers
+
+
+def find_best_locations(maps, top_n=10):
+    """
+    Trouve les meilleures cases libres où placer une récolteuse.
+    Utilise la densité effective (bonus usines inclus).
+
+    Retourne :
+      {
+        "top_spots":          [{"coords": (x,y), "rendement": int, "secteur": int}, ...],
+        "classement_secteurs": [{"secteur": int, "nombre_de_spots": int, "score_cumule": int}, ...]
+      }
+    """
+    carte_obj = maps['obj']
+    dns_eff   = apply_bonus_factories(maps)  # matrice entière avec bonus
+
+    emplacements = []
+    for y in range(16):
+        for x in range(18):
+            if carte_obj[y][x] != 'X':
+                continue
+
+            # Case centrale + 6 voisins hex
+            zone = [(x, y)] + get_hex_neighbors(x, y)
+            rendement = 0
+            for vx, vy in zone:
+                # Ne pas compter les cases usines dans le rendement
+                if carte_obj[vy][vx] != 'U':
+                    rendement += dns_eff[vy][vx]
+
+            emplacements.append({
+                "coords":   (x, y),
+                "rendement": rendement,
+                "secteur":  get_secteur_de_case(x, y)
             })
 
-    classement_ennemis.sort(key=lambda x: x["score"], reverse=True)
+    emplacements.sort(key=lambda i: i['rendement'], reverse=True)
+    top = emplacements[:top_n]
 
-    return classement_ennemis
+    stats = {i: {"count": 0, "score_total": 0} for i in range(4)}
+    for p in top:
+        stats[p["secteur"]]["count"]       += 1
+        stats[p["secteur"]]["score_total"] += p["rendement"]
+
+    classement = sorted(
+        [{"secteur": s, "nombre_de_spots": v["count"], "score_cumule": v["score_total"]}
+         for s, v in stats.items()],
+        key=lambda s: (s["nombre_de_spots"], s["score_cumule"]),
+        reverse=True
+    )
+
+    return {"top_spots": top, "classement_secteurs": classement}
+
+
+def analyze_competition_spice(x, y, maps, mon_id):
+    """
+    Analyse une case : qui récolte dessus, quelle est sa densité effective ?
+
+    Retourne :
+      {
+        "case_epice":          (x, y),
+        "densite_epice":       int (densité effective),
+        "recolteuses_alliees": [(x,y), ...],
+        "recolteuses_adverses":[{"coords": (x,y), "id_joueur": str}, ...],
+        "usine_sur_case":      bool,
+        "diviseur_recolte":    int  (nombre total de récolteuses sur la case/voisins)
+      }
+    """
+    carte_obj = maps['obj']
+    dns_eff   = apply_bonus_factories(maps)
+
+    zone = [(x, y)] + get_hex_neighbors(x, y)
+
+    resultat = {
+        "case_epice":           (x, y),
+        "densite_epice":        dns_eff[y][x],
+        "recolteuses_alliees":  [],
+        "recolteuses_adverses": [],
+        "usine_sur_case":       carte_obj[y][x] == 'U',
+        "diviseur_recolte":     0
+    }
+
+    for vx, vy in zone:
+        elem = carte_obj[vy][vx]
+        if elem.isdigit():
+            resultat["diviseur_recolte"] += 1
+            if elem == str(mon_id):
+                resultat["recolteuses_alliees"].append((vx, vy))
+            else:
+                resultat["recolteuses_adverses"].append({"coords": (vx, vy), "id_joueur": elem})
+
+    return resultat
+
+
+def find_best_factory_spot(maps, mon_id):
+    """
+    Cherche la meilleure case libre pour poser une usine.
+    Score = (nb alliés boostés × 10) + (épice potentielle alliée) − (nb ennemis boostés × 15)
+    
+    Conditions :
+      - La case doit être libre ('X')
+      - Au moins 2 récolteuses alliées dans le rayon 2
+      - Pas d'usine déjà présente dans le rayon 2 (évite les doublons inutiles)
+    """
+    carte_obj = maps['obj']
+    dns_eff   = apply_bonus_factories(maps)
+
+    meilleur_spot  = None
+    meilleur_score = -9999
+
+    for y in range(16):
+        for x in range(18):
+            if carte_obj[y][x] != 'X':
+                continue
+
+            zone = get_hex_neighbors_radius2(x, y)
+
+            # Refuser si une usine est déjà dans la zone (bonus déjà couvert)
+            if any(carte_obj[vy][vx] == 'U' for vx, vy in zone):
+                continue
+
+            allies  = 0
+            ennemis = 0
+            epice   = 0
+            for vx, vy in zone:
+                elem = carte_obj[vy][vx]
+                if elem == str(mon_id):
+                    allies += 1
+                    epice  += dns_eff[vy][vx]
+                elif elem.isdigit():
+                    ennemis += 1
+
+            if allies < 2:
+                continue
+
+            score = (allies * 10) + epice - (ennemis * 15)
+            if score > meilleur_score:
+                meilleur_score = score
+                meilleur_spot  = (x, y)
+
+    return {"coords": meilleur_spot, "score_rentabilite": meilleur_score}
+
 
 def strategic_sabotage_advance(maps, mon_id, classement_ennemis):
     """
-    Trouve le meilleur secteur à saboter en ciblant le leader, tout en 
-    autorisant le tir allié (sacrifice) SEULEMENT si c'est mathématiquement rentable.
+    Identifie le meilleur secteur à saboter.
+    Cible prioritairement le leader. Refuse les secteurs où seuls nos alliés sont présents.
+    Score = gains (ennemis détruits, ×3 si leader) − pertes (nos récolteuses sacrifiées).
+
+    Retourne une liste de candidats triés par score décroissant.
     """
     carte_obj = maps['obj']
-    
-    joueur_en_tete = classement_ennemis[0]["id_joueur"]
+    if not classement_ennemis:
+        return []
 
-    stats_secteurs = {i: {'ennemis_total': 0, 'allies': 0, 'ennemis_leader': 0} for i in range(4)}
+    leader_id = classement_ennemis[0]["id_joueur"]
+    stats = {i: {'ennemis': 0, 'allies': 0, 'leader': 0} for i in range(4)}
     total_allies = 0
 
     for y in range(16):
         for x in range(18):
-            element = carte_obj[y][x]
-
-            if element.isdigit():
-                if y < 8 and x < 9: sec = 0
-                elif y < 8 and x >= 9: sec = 1
-                elif y >= 8 and x < 9: sec = 2
-                else: sec = 3
-
-                if element == str(mon_id):
-                    stats_secteurs[sec]['allies'] += 1
-                    total_allies += 1  
-                else:
-                    stats_secteurs[sec]['ennemis_total'] += 1
-                    if element == joueur_en_tete:
-                        stats_secteurs[sec]['ennemis_leader'] += 1
-
+            elem = carte_obj[y][x]
+            if not elem.isdigit():
+                continue
+            sec = get_secteur_de_case(x, y)
+            if elem == str(mon_id):
+                stats[sec]['allies'] += 1
+                total_allies += 1
+            else:
+                stats[sec]['ennemis'] += 1
+                if elem == leader_id:
+                    stats[sec]['leader'] += 1
 
     cibles = []
-    for sec, stats in stats_secteurs.items():
-        ennemis = stats['ennemis_total']
-        allies = stats['allies']
-        leader = stats['ennemis_leader']
-
-        if ennemis == 0:
+    for sec, s in stats.items():
+        if s['ennemis'] == 0:
+            continue
+        # Ne pas saboter un secteur où seuls nos alliés seraient touchés
+        if s['allies'] > 0 and total_allies > 0 and s['allies'] == total_allies:
             continue
 
-        if allies > 0 and allies == total_allies:
-            continue
+        gains  = (s['ennemis'] - s['leader']) * 1 + s['leader'] * 3
+        pertes = s['allies'] * (10 / max(total_allies, 1))
+        score  = gains - pertes
 
-        ennemis_lambdas = ennemis - leader
-        gains = (ennemis_lambdas * 1) + (leader * 3)
-
-        if allies > 0:
-            malus_par_allie = 10 / total_allies 
-            pertes = allies * malus_par_allie
-        else:
-            pertes = 0
-
-        score_cible = gains - pertes
-
-        if score_cible > 0:
+        if score > 0:
             cibles.append({
-                "secteur": sec,
-                "score_cible": score_cible,
-                "machines_detruites": ennemis,
-                "dont_leader": leader,
-                "sacrifices": allies
+                "secteur":          sec,
+                "score_cible":      score,
+                "ennemis_detruits": s['ennemis'],
+                "dont_leader":      s['leader'],
+                "sacrifices":       s['allies']
             })
 
-    cibles.sort(key=lambda item: item['score_cible'], reverse=True)
-    
+    cibles.sort(key=lambda c: c['score_cible'], reverse=True)
     return cibles
+
+
+def evacuation_protocol(maps, mon_id, alertes_secteurs):
+    """
+    Identifie les récolteuses en DANGER et leur trouve un spot de repli sûr.
+
+    alertes_secteurs : liste de 4 strings, ex ['CALME', 'DANGER', 'INCONNU', 'CALME']
+
+    Retourne une liste d'ordres :
+      [{"orig_x": int, "orig_y": int, "dest_x": int, "dest_y": int}, ...]
+    """
+    carte_obj = maps['obj']
+
+    secteurs_dangereux = {i for i in range(4) if alertes_secteurs[i] == 'DANGER'}
+    if not secteurs_dangereux:
+        return []
+
+    en_danger = [
+        (x, y)
+        for y in range(16)
+        for x in range(18)
+        if carte_obj[y][x] == str(mon_id) and get_secteur_de_case(x, y) in secteurs_dangereux
+    ]
+    if not en_danger:
+        return []
+
+    # Spots de repli : cases libres dans des secteurs non dangereux, triées par rendement
+    spots_dispos = [
+        s for s in find_best_locations(maps, top_n=50)["top_spots"]
+        if s["secteur"] not in secteurs_dangereux
+    ]
+
+    ordres = []
+    spots_utilises = set()
+    for (ox, oy) in en_danger:
+        for spot in spots_dispos:
+            coords = spot["coords"]
+            if coords not in spots_utilises:
+                ordres.append({
+                    "orig_x": ox, "orig_y": oy,
+                    "dest_x": coords[0], "dest_y": coords[1]
+                })
+                spots_utilises.add(coords)
+                break
+
+    return ordres
