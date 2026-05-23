@@ -20,10 +20,9 @@ class SpiceBotUltime:
         self.host = "127.0.0.1"
         self.port = 1234
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
         self.mon_id = -1
         self.actions_restantes = MAX_ACTIONS
-        self._buffer = ""  # Buffer TCP interne — la clé du fix
+        self._buffer = ""
 
         self.plateau = {}
         for l in range(HAUTEUR):
@@ -35,12 +34,11 @@ class SpiceBotUltime:
                 }
 
     # ─────────────────────────────────────────────
-    # COUCHE RÉSEAU PROPRE
+    # COUCHE RÉSEAU
     # ─────────────────────────────────────────────
 
     def _readline(self):
-        """Lit UNE ligne complète depuis le socket, en bufferisant le reste.
-        C'est LA correction fondamentale : plus jamais de messages avalés ou perdus."""
+        """Lit UNE ligne complète depuis le socket via buffer interne."""
         while '\n' not in self._buffer:
             data = self.sock.recv(4096).decode('utf-8')
             if not data:
@@ -49,23 +47,17 @@ class SpiceBotUltime:
         line, self._buffer = self._buffer.split('\n', 1)
         return line.strip()
 
-    def envoyer(self, cmd):
-        """Envoie une commande ET lit la réponse (vide le tuyau TCP)."""
+    def envoyer_query(self, cmd):
+        """Envoie une commande ET attend une réponse (DENSITE, ELEMENTS, WARNING)."""
         self.sock.sendall((cmd + "\n").encode('utf-8'))
         return self._readline()
 
-    def envoyer_sans_reponse(self, cmd):
-        """Envoie SANS lire de réponse — réservé à FINDETOUR uniquement."""
-        self.sock.sendall((cmd + "\n").encode('utf-8'))
-
     def envoyer_action(self, cmd):
-        """Envoie une action de jeu si la limite n'est pas dépassée.
-        On LIT la réponse (OK / NOK) pour ne pas polluer le buffer."""
+        """Envoie une action SANS attendre de réponse (AJOUTERRECOLTEUSE, DEPLACER, etc.)
+        Le serveur ne répond probablement pas aux actions — bloquer ici = timeout = kick."""
         if self.actions_restantes > 0:
-            rep = self.envoyer(cmd)
+            self.sock.sendall((cmd + "\n").encode('utf-8'))
             self.actions_restantes -= 1
-            return rep
-        return "NOK|Limite atteinte"
 
     # ─────────────────────────────────────────────
     # CONNEXION & BOUCLE PRINCIPALE
@@ -77,20 +69,22 @@ class SpiceBotUltime:
 
         msg = self._readline()
         if msg == "NOM_EQUIPE":
-            reponse = self.envoyer(self.equipe)
+            # Le nom d'équipe a une réponse ("Bonjour... vous êtes l'équipe |X")
+            self.sock.sendall((self.equipe + "\n").encode('utf-8'))
+            reponse = self._readline()
             print(f"[*] Réponse serveur : {reponse}")
             if "|" in reponse:
                 try:
                     self.mon_id = int(reponse.split('|')[1].strip())
                     print(f"[+] Mon ID de joueur : {self.mon_id}")
                 except ValueError:
-                    print("[!] Impossible de parser l'ID — valeur brute :", reponse)
+                    print("[!] Impossible de parser l'ID — brut :", reponse)
 
         self.boucle_jeu()
 
     def actualiser_plateau(self):
-        rep_densite = self.envoyer("DENSITE")
-        rep_elements = self.envoyer("ELEMENTS")
+        rep_densite = self.envoyer_query("DENSITE")
+        rep_elements = self.envoyer_query("ELEMENTS")
 
         if len(rep_densite) >= HAUTEUR * LARGEUR and len(rep_elements) >= HAUTEUR * LARGEUR:
             for i in range(HAUTEUR * LARGEUR):
@@ -112,22 +106,26 @@ class SpiceBotUltime:
             if not msg:
                 continue
 
-            if msg.startswith("DEBUT_TOUR"):
-                parts = msg.split('|')
-                tour = parts[1] if len(parts) > 1 else "?"
-                print(f"\n{'='*10} TOUR {tour} {'='*10}")
-                self.actions_restantes = MAX_ACTIONS
+            # Le serveur peut envoyer des messages inattendus (OK, NOK, etc.)
+            # On les ignore et on attend uniquement DEBUT_TOUR
+            if not msg.startswith("DEBUT_TOUR"):
+                print(f"[~] Message ignoré : {msg}")
+                continue
 
-                self.actualiser_plateau()
-                alertes_vers = self.envoyer("WARNING").split('|')
-                print(f"[*] Alertes Vers : {alertes_vers}")
+            parts = msg.split('|')
+            tour = parts[1] if len(parts) > 1 else "?"
+            print(f"\n{'='*10} TOUR {tour} {'='*10}")
+            self.actions_restantes = MAX_ACTIONS
 
-                self.jouer_tour(alertes_vers)
+            self.actualiser_plateau()
+            alertes_vers = self.envoyer_query("WARNING").split('|')
+            print(f"[*] Alertes Vers : {alertes_vers}")
 
-                print(f"[*] Fin du tour. Actions restantes : {self.actions_restantes}")
-                self.envoyer_sans_reponse("FINDETOUR")  # seule commande sans réponse
+            self.jouer_tour(alertes_vers)
 
-            # On ignore les autres messages (PARTIE_TERMINEE, etc.)
+            print(f"[*] Fin du tour. Actions restantes : {self.actions_restantes}")
+            # FINDETOUR : pas de réponse attendue
+            self.sock.sendall(("FINDETOUR\n").encode('utf-8'))
 
     # ─────────────────────────────────────────────
     # CERVEAU : STRATÉGIE IMITATEUR
@@ -142,6 +140,8 @@ class SpiceBotUltime:
 
         # ── PRIORITÉ 1 : SURVIE ──────────────────
         for l, c in mes_recolteuses:
+            if self.actions_restantes <= 0:
+                break
             secteur = get_secteur(l, c)
             if alertes_vers[secteur] == "DANGER":
                 print(f"  [!] DANGER S{secteur} ! Évacuation ({l},{c})")
@@ -153,12 +153,16 @@ class SpiceBotUltime:
         # ── PRIORITÉ 2 : RADARS (ORNI) ───────────
         secteurs_occupes = {get_secteur(l, c) for l, c in mes_recolteuses}
         for s in secteurs_occupes:
+            if self.actions_restantes <= 0:
+                break
             if alertes_vers[s] == "INCONNU":
                 print(f"  [Radar] Orni secteur {s}")
                 self.envoyer_action(f"AJOUTERORNI|{s}")
 
         # ── PRIORITÉ 3 : RIPOSTE (Tit-for-Tat) ──
         for l, c in mes_recolteuses:
+            if self.actions_restantes <= 0:
+                break
             for el, ec in ennemis:
                 if distance_rapide(l, c, el, ec) <= 2:
                     print(f"  [Riposte] Ennemi en ({el},{ec}) — blocage !")
@@ -186,7 +190,7 @@ class SpiceBotUltime:
             if self.actions_restantes <= 0:
                 break
             if not any(distance_rapide(l, c, el, ec) <= 2 for el, ec in ennemis):
-                print(f"  [Farming] Récolteuse sur ({l},{c}) densité={self.plateau[(l,c)]['densite']}")
+                print(f"  [Farming] Récolteuse ({l},{c}) densité={self.plateau[(l,c)]['densite']}")
                 self.envoyer_action(f"AJOUTERRECOLTEUSE|{l}|{c}")
 
 
@@ -195,6 +199,8 @@ if __name__ == "__main__":
     bot = SpiceBotUltime(equipe=nom_equipe)
     try:
         bot.connecter()
+    except ConnectionResetError:
+        print("\n[!] Serveur déconnecté (fin de partie ou kick).")
     except KeyboardInterrupt:
         print("\n[!] Arrêt du bot.")
     except Exception as e:

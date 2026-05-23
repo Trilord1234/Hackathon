@@ -22,20 +22,19 @@ class BotNaif:
         line, self._buffer = self._buffer.split('\n', 1)
         return line.strip()
 
-    def envoyer(self, cmd):
-        """Envoie et LIT la réponse — vide toujours le tuyau TCP."""
+    def envoyer_query(self, cmd):
         self.sock.sendall((cmd + "\n").encode('utf-8'))
         return self._readline()
 
-    def envoyer_sans_reponse(self, cmd):
-        """Sans lecture — UNIQUEMENT pour FINDETOUR."""
+    def envoyer_action(self, cmd):
         self.sock.sendall((cmd + "\n").encode('utf-8'))
 
     def connecter(self):
         self.sock.connect(("127.0.0.1", 1234))
         msg = self._readline()
         if msg == "NOM_EQUIPE":
-            rep = self.envoyer(self.equipe)
+            self.sock.sendall((self.equipe + "\n").encode('utf-8'))
+            rep = self._readline()
             print(f"[Naif] Connecté : {rep}")
             if "|" in rep:
                 try:
@@ -45,48 +44,41 @@ class BotNaif:
         self.boucle()
 
     def boucle(self):
-        print("[Naif] En attente du début de la partie...")
+        print("[Naif] En attente...")
         while True:
             msg = self._readline()
-            if not msg:
+            if not msg or not msg.startswith("DEBUT_TOUR"):
                 continue
 
-            if msg.startswith("DEBUT_TOUR"):
-                tour = msg.split('|')[1] if '|' in msg else "?"
-                print(f"[Naif] === Tour {tour} ===")
+            tour = msg.split('|')[1] if '|' in msg else "?"
+            print(f"[Naif] === Tour {tour} ===")
 
-                # Mise à jour du plateau
-                rep_densite = self.envoyer("DENSITE")
-                rep_elements = self.envoyer("ELEMENTS")
-                for i in range(HAUTEUR * LARGEUR):
-                    l, c = divmod(i, LARGEUR)
-                    self.plateau[(l, c)]['densite'] = int(rep_densite[i])
-                    self.plateau[(l, c)]['element'] = rep_elements[i]
+            rep_densite = self.envoyer_query("DENSITE")
+            rep_elements = self.envoyer_query("ELEMENTS")
+            for i in range(HAUTEUR * LARGEUR):
+                l, c = divmod(i, LARGEUR)
+                self.plateau[(l, c)]['densite'] = int(rep_densite[i])
+                self.plateau[(l, c)]['element'] = rep_elements[i]
 
-                # ── CERVEAU NAÏF : place des récolteuses sur les cases les plus riches ──
-                actions = 15
-                cases_libres = [
-                    (l, c)
-                    for (l, c), d in self.plateau.items()
-                    if d['element'] == 'X'
-                ]
-                cases_libres.sort(
-                    key=lambda coord: self.plateau[coord]['densite'],
-                    reverse=True
-                )
+            actions = 15
+            cases_libres = [
+                (l, c) for (l, c), d in self.plateau.items() if d['element'] == 'X'
+            ]
+            cases_libres.sort(key=lambda coord: self.plateau[coord]['densite'], reverse=True)
 
-                for l, c in cases_libres:
-                    if actions <= 0:
-                        break
-                    # On lit la réponse pour vider le buffer (OK ou NOK)
-                    rep = self.envoyer(f"AJOUTERRECOLTEUSE|{l}|{c}")
-                    actions -= 1
-                    # Si on manque d'argent, inutile de continuer à spammer
-                    if rep.startswith("NOK") and "argent" in rep.lower():
-                        break
+            for l, c in cases_libres:
+                if actions <= 0:
+                    break
+                self.envoyer_action(f"AJOUTERRECOLTEUSE|{l}|{c}")
+                actions -= 1
 
-                self.envoyer_sans_reponse("FINDETOUR")
+            self.sock.sendall(("FINDETOUR\n").encode('utf-8'))
 
 
 if __name__ == "__main__":
-    BotNaif().connecter()
+    try:
+        BotNaif().connecter()
+    except ConnectionResetError:
+        print("[Naif] Déconnecté (fin de partie).")
+    except KeyboardInterrupt:
+        pass
