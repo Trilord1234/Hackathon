@@ -2,7 +2,6 @@ import socket
 import select
 import sys
 import random
-import Maps
 
 # --- CONSTANTES ---
 HAUTEUR, LARGEUR = 16, 18
@@ -10,7 +9,7 @@ MAX_ACTIONS = 15
 PRIX_RECOLTEUSE = 3000
 PRIX_USINE = 5000
 PRIX_ORNI = 400
-PRIX_SABOTAGE = 500
+PRIX_SABOTAGE = 600
 
 def get_secteur(l, c):
     return (0 if c <= 8 else 1) if l <= 7 else (2 if c <= 8 else 3)
@@ -31,10 +30,10 @@ class SpiceBotMaster:
             for c in range(LARGEUR):
                 self.plateau[(l, c)] = {'densite': 0, 'element': 'X', 'secteur': get_secteur(l, c)}
 
-    # ── 1. RÉSEAU SYNCHRONE SÉCURISÉ ─────────────────────────────────────────
+    # ── 1. RÉSEAU SYNCHRONE BLINDÉ ───────────────────────────────────────────
     
     def connecter(self):
-        print(f"[*] Démarrage IA Master v2 : {self.equipe}...")
+        print(f"[*] Démarrage IA Master v3 (Anti-Crash) : {self.equipe}...")
         self.sock.connect(("127.0.0.1", 1234))
         while True:
             for msg in self.lire_reseau(0.1):
@@ -52,7 +51,7 @@ class SpiceBotMaster:
         self.sock.sendall((cmd + "\n").encode('utf-8'))
 
     def envoyer_action(self, cmd):
-        # Sécurité stricte sur le quota d'actions
+        # Le garde-fou ultime : impossible de spammer le serveur
         if self.actions_restantes > 0:
             self.envoyer(cmd)
             self.actions_restantes -= 1
@@ -88,18 +87,18 @@ class SpiceBotMaster:
 
     # ── 2. HEAT MAP (Moteur Tactique) ────────────────────────────────────────
     
-    def generer_heatmap(self, alertes_vers, ennemis, mes_unites, usines_ennemies, usines_alliees, secteurs_condamnes, phase):
+    def generer_heatmap(self, alertes_vers, ennemis, mes_unites, usines_ennemies, secteurs_condamnes, phase):
         scores_cases = []
-        
         ennemis_par_sect = {0:0, 1:0, 2:0, 3:0}
         allies_par_sect = {0:0, 1:0, 2:0, 3:0}
+        
         for el, ec in ennemis: ennemis_par_sect[get_secteur(el, ec)] += 1
         for ml, mc in mes_unites: allies_par_sect[get_secteur(ml, mc)] += 1
 
         for l in range(HAUTEUR):
             for c in range(LARGEUR):
                 data = self.plateau[(l, c)]
-                if data['element'] != 'X': continue
+                if data['element'] != 'X': continue # Strictement vide
                 
                 sect = data['secteur']
                 if alertes_vers[sect] == "DANGER" or sect in secteurs_condamnes: continue
@@ -107,17 +106,15 @@ class SpiceBotMaster:
                 score = data['densite'] * 10
                 if score <= 0: continue
 
-                # TACTIQUE : Blocus Industriel (Parasitisme extrême)
+                # TACTIQUE : Voler le bonus des usines
                 if any(distance(l, c, ul, uc) <= 2 for ul, uc in usines_ennemies):
-                    score *= 3 # La priorité absolue est de voler la place autour de leurs usines
-                elif any(distance(l, c, ul, uc) <= 2 for ul, uc in usines_alliees):
-                    score *= 2 # Ensuite nos usines
+                    score *= 3
 
-                # TACTIQUE : Anti-Clustering
+                # TACTIQUE : Anti-Clustering (Disperser pour survivre)
                 if allies_par_sect[sect] >= 4:
                     score -= 100 
 
-                # TACTIQUE : Bait & Switch
+                # TACTIQUE : Bait (Laisser les ennemis s'entasser)
                 if ennemis_par_sect[sect] > 0:
                     score -= (ennemis_par_sect[sect] * 10)
 
@@ -127,7 +124,7 @@ class SpiceBotMaster:
         scores_cases.sort(key=lambda x: x['score'], reverse=True)
         return scores_cases
 
-    # ── 3. BOUCLE ET COMPTABILITÉ STRICTE ────────────────────────────────────
+    # ── 3. BOUCLE DE SYNCHRONISATION ─────────────────────────────────────────
     
     def boucle_jeu(self):
         tour_actuel = 0
@@ -139,40 +136,39 @@ class SpiceBotMaster:
                     
                     phase = "EARLY"
                     if tour_actuel > 50: phase = "MID"
-                    if tour_actuel > 150: phase = "LATE"
+                    if tour_actuel > 175: phase = "LATE"
                     
                     print(f"\n{'='*12} TOUR {tour_actuel} [{phase}] {'='*12}")
-                    
                     self.actions_restantes = MAX_ACTIONS
                     
+                    # Consommation des actions pour Scanner
                     rep_densite = self.requete("DENSITE")
                     self.actions_restantes -= 1
                     rep_elements = self.requete("ELEMENTS")
                     self.actions_restantes -= 1
-                    alertes_vers = self.requete("WARNING").split('|')
-                    self.actions_restantes -= 1
-                    scores_bruts = self.requete("SCORES").split('|')
+                    
+                    # Failsafe Split : Empêche le crash si le serveur coupe la chaîne
+                    raw_warning = self.requete("WARNING")
+                    alertes_vers = (raw_warning + "|INCONNU|INCONNU|INCONNU").split('|')[:4]
                     self.actions_restantes -= 1
                     
-                    # --- COMPTABILITÉ CLIENT (Le correctif Anti-Crash) ---
+                    raw_scores = self.requete("SCORES")
+                    scores_bruts = (raw_scores + "|0|0|0|0").split('|')
+                    self.actions_restantes -= 1
+                    
                     mon_budget = 0
                     try:
                         if 0 <= self.mon_id < len(scores_bruts):
                             mon_budget = int(scores_bruts[self.mon_id])
-                        else:
-                            mon_budget = int(scores_bruts[0])
+                        else: mon_budget = int(scores_bruts[0])
                     except: pass
 
-                    print(f"[*] Trésorerie : {mon_budget} | Actions Dispos : {self.actions_restantes}")
+                    print(f"[*] Trésorerie : {mon_budget} | Actions Restantes : {self.actions_restantes}")
 
                     for i in range(HAUTEUR * LARGEUR):
                         l, c = divmod(i, LARGEUR)
                         self.plateau[(l, c)]['densite'] = int(rep_densite[i]) if rep_densite[i].isdigit() else 0
                         self.plateau[(l, c)]['element'] = rep_elements[i]
-                        try:
-                            Maps.maps['obj'][l][c] = rep_elements[i]
-                            Maps.maps['dns'][l][c] = rep_densite[i]
-                        except: pass 
 
                     self.jouer_tour(alertes_vers, tour_actuel, phase, mon_budget)
                     self.envoyer("FINDETOUR")
@@ -181,66 +177,73 @@ class SpiceBotMaster:
         mes_unites = [(l, c) for (l, c), d in self.plateau.items() if d['element'] == str(self.mon_id)]
         ennemis = [(l, c) for (l, c), d in self.plateau.items() if d['element'] in ['0','1','2','3'] and d['element'] != str(self.mon_id)]
         usines_actives = [(l, c) for (l, c), d in self.plateau.items() if d['element'] == 'U']
-        mes_usines = [] # On pourrait tracker les notres vs ennemies, mais pour le blocus on traite tout pareil
 
+        # Démographie et SCANNER DE BOURDES (Anti-Stacking)
         secteurs_condamnes = set()
         ennemis_par_sect = {0:0, 1:0, 2:0, 3:0}
         allies_par_sect = {0:0, 1:0, 2:0, 3:0}
+        allies_sur_case = {} # Le détecteur de collision
+        
         for el, ec in ennemis: ennemis_par_sect[get_secteur(el, ec)] += 1
-        for ml, mc in mes_unites: allies_par_sect[get_secteur(ml, mc)] += 1
+        for ml, mc in mes_unites: 
+            allies_par_sect[get_secteur(ml, mc)] += 1
+            allies_sur_case[(ml, mc)] = allies_sur_case.get((ml, mc), 0) + 1
 
-        # --- PRIORITÉ 1 : SURVIE (Maps.py) ---
-        try:
-            ordres_evac = Maps.evacuation_protocol(Maps.maps, self.mon_id, alertes_vers)
-            for ordre in ordres_evac:
-                if self.envoyer_action(f"DEPLACER|{ordre['orig_y']}|{ordre['orig_x']}|{ordre['dest_y']}|{ordre['dest_x']}"):
-                    print(f"  [SURVIE] Fuite validée vers ({ordre['dest_y']},{ordre['dest_x']})")
-        except: pass
-
-        # --- PRIORITÉ 2 : TERRE BRÛLÉE ET ASSASSINAT ---
+        # --- PHASE 1 : SABOTAGE ET TERRE BRÛLÉE ---
         if phase != "EARLY": 
             for sect in range(4):
                 if alertes_vers[sect] == "DANGER": continue
-                
-                # Terre Brûlée : En fin de partie, on crame tout secteur où l'ennemi s'installe
                 if phase == "LATE" and ennemis_par_sect[sect] >= 1 and allies_par_sect[sect] == 0:
-                    if mon_budget >= PRIX_SABOTAGE:
-                        if self.envoyer_action(f"SABOTER|{sect}"):
-                            print(f"  [TERRE BRÛLÉE] 💥 Harcèlement Secteur {sect}")
-                            mon_budget -= PRIX_SABOTAGE
-                            secteurs_condamnes.add(sect)
-                
-                # Assassinat classique : Ratio très rentable (3 ennemis ou plus)
+                    if mon_budget >= PRIX_SABOTAGE and self.envoyer_action(f"SABOTER|{sect}"):
+                        print(f"  [TERRE BRÛLÉE] 💥 Harcèlement Secteur {sect}")
+                        mon_budget -= PRIX_SABOTAGE
+                        secteurs_condamnes.add(sect)
                 elif ennemis_par_sect[sect] >= 3 and allies_par_sect[sect] <= 1:
-                    if mon_budget >= PRIX_SABOTAGE:
-                        if self.envoyer_action(f"SABOTER|{sect}"):
-                            print(f"  [KAMIKAZE] 💥 Frappe Majeure Secteur {sect}")
-                            mon_budget -= PRIX_SABOTAGE
-                            secteurs_condamnes.add(sect)
+                    if mon_budget >= PRIX_SABOTAGE and self.envoyer_action(f"SABOTER|{sect}"):
+                        print(f"  [KAMIKAZE] 💥 Frappe Majeure Secteur {sect}")
+                        mon_budget -= PRIX_SABOTAGE
+                        secteurs_condamnes.add(sect)
 
-        # --- PRIORITÉ 3 : VISION (Radars) ---
+        # --- PHASE 2 : HEAT MAP (Calculée après les condamnations) ---
+        heatmap = self.generer_heatmap(alertes_vers, ennemis, mes_unites, usines_actives, secteurs_condamnes, phase)
+
+        # --- PHASE 3 : SURVIE NATIVE (Fini Maps.py, zéro crash garanti) ---
+        for l, c in mes_unites:
+            if self.actions_restantes <= 0: break
+            sect = get_secteur(l, c)
+            if alertes_vers[sect] == "DANGER":
+                if heatmap:
+                    cible = heatmap.pop(0) # Impossible de cibler 2 fois la même case
+                    if self.envoyer_action(f"DEPLACER|{l}|{c}|{cible['l']}|{cible['c']}"):
+                        print(f"  [SURVIE] Fuite validée vers ({cible['l']},{cible['c']})")
+                        allies_sur_case[(l, c)] -= 1 # Mise à jour locale
+
+        # --- PHASE 4 : VISION (Radars) ---
         for sect in {get_secteur(l, c) for l, c in mes_unites}:
             if sect < len(alertes_vers) and alertes_vers[sect] == "INCONNU" and sect not in secteurs_condamnes:
-                if mon_budget >= PRIX_ORNI:
-                    if self.envoyer_action(f"AJOUTERORNI|{sect}"):
-                        print(f"  [VISION] Radar activé Secteur {sect}")
-                        mon_budget -= PRIX_ORNI
+                if mon_budget >= PRIX_ORNI and self.envoyer_action(f"AJOUTERORNI|{sect}"):
+                    print(f"  [VISION] Radar activé Secteur {sect}")
+                    mon_budget -= PRIX_ORNI
 
-        # --- PRIORITÉ 4 : HEAT MAP & MIGRATION ---
-        heatmap = self.generer_heatmap(alertes_vers, ennemis, mes_unites, usines_actives, mes_usines, secteurs_condamnes, phase)
-
+        # --- PHASE 5 : CORRECTION DES BOURDES & MIGRATION ---
         for l, c in mes_unites:
             if self.actions_restantes <= 0: break
             densite = self.plateau[(l, c)]['densite']
-            partage = any(distance(l, c, el, ec) == 0 for el, ec in ennemis)
+            partage_ennemi = any(distance(l, c, el, ec) == 0 for el, ec in ennemis)
+            surcharge_alliee = allies_sur_case.get((l, c), 0) > 1 # VÉRIFICATION DE BOURDE ICI
             
-            if densite <= 1 or partage:
+            # Si la case est pauvre, ou volée, ou si on est empilé bêtement sur nous-mêmes
+            if densite <= 1 or partage_ennemi or surcharge_alliee:
                 if heatmap:
                     cible = heatmap.pop(0)
                     if self.envoyer_action(f"DEPLACER|{l}|{c}|{cible['l']}|{cible['c']}"):
-                        print(f"  [MIGRATION] Repositionnement sur ({cible['l']},{cible['c']})")
+                        if surcharge_alliee:
+                            print(f"  [ANTI-BOURDE] Dé-collage d'unité ! Transfert vers ({cible['l']},{cible['c']})")
+                        else:
+                            print(f"  [MIGRATION] Repositionnement sur ({cible['l']},{cible['c']})")
+                        allies_sur_case[(l, c)] -= 1
 
-        # --- PRIORITÉ 5 : EXPANSION COMPTABLE ---
+        # --- PHASE 6 : EXPANSION ---
         if phase != "LATE": 
             while self.actions_restantes > 0 and heatmap:
                 cible = heatmap.pop(0)
@@ -267,7 +270,7 @@ class SpiceBotMaster:
                             print(f"  [ACHAT] Unité déployée en ({cible['l']},{cible['c']})")
                             mon_budget -= PRIX_RECOLTEUSE
                 else:
-                    break # On n'a plus l'argent pour acheter, on casse la boucle proprement
+                    break 
 
 if __name__ == "__main__":
     nom_equipe = sys.argv[1] if len(sys.argv) > 1 else "Equipe_ESEO"
