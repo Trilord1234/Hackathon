@@ -15,7 +15,7 @@ from Maps import (
 # -------- Configuration --------
 HOST       = "127.0.0.1"
 PORT       = 1234
-TEAM_NAME  = "SpiceBot"   # < 15 caractères
+TEAM_NAME  = "RedHood"   # < 15 caractères
 
 # -------- Constantes -----------
 COUT_ACTION   = 5000   # coût d'une récolteuse, usine ou sabotage
