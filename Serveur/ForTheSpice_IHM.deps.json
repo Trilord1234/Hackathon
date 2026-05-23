@@ -1,0 +1,91 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "ForTheSpice_IHM/1.0.0": {
+        "dependencies": {
+          "ForTheSpice_OUTILS": "1.0.0",
+          "ForTheSpice_VM": "1.0.0"
+        },
+        "runtime": {
+          "ForTheSpice_IHM.dll": {}
+        }
+      },
+      "ForTheSpice_EXCEPTION/1.0.0": {
+        "runtime": {
+          "ForTheSpice_EXCEPTION.dll": {}
+        }
+      },
+      "ForTheSpice_METIER/1.0.0": {
+        "dependencies": {
+          "ForTheSpice_EXCEPTION": "1.0.0",
+          "ForTheSpice_OUTILS": "1.0.0"
+        },
+        "runtime": {
+          "ForTheSpice_METIER.dll": {}
+        }
+      },
+      "ForTheSpice_OUTILS/1.0.0": {
+        "runtime": {
+          "ForTheSpice_OUTILS.dll": {}
+        }
+      },
+      "ForTheSpice_RESEAU/1.0.0": {
+        "dependencies": {
+          "ForTheSpice_EXCEPTION": "1.0.0",
+          "ForTheSpice_METIER": "1.0.0",
+          "ForTheSpice_OUTILS": "1.0.0"
+        },
+        "runtime": {
+          "ForTheSpice_RESEAU.dll": {}
+        }
+      },
+      "ForTheSpice_VM/1.0.0": {
+        "dependencies": {
+          "ForTheSpice_METIER": "1.0.0",
+          "ForTheSpice_OUTILS": "1.0.0",
+          "ForTheSpice_RESEAU": "1.0.0"
+        },
+        "runtime": {
+          "ForTheSpice_VM.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "ForTheSpice_IHM/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ForTheSpice_EXCEPTION/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ForTheSpice_METIER/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ForTheSpice_OUTILS/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ForTheSpice_RESEAU/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ForTheSpice_VM/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
