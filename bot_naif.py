@@ -1,10 +1,13 @@
 import socket
+import select
+import sys
 
 HAUTEUR, LARGEUR = 16, 18
+PRIX_RECOLTEUSE = 5000
 
 class BotNaif:
     def __init__(self):
-        self.equipe = "Naif"
+        self.equipe = "Bot_Naif"
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.mon_id = -1
         self._buffer = ""
@@ -13,86 +16,73 @@ class BotNaif:
             for c in range(LARGEUR):
                 self.plateau[(l, c)] = {'densite': 0, 'element': 'X'}
 
-    def _readline(self):
-        while '\n' not in self._buffer:
+    def envoyer(self, cmd):
+        self.sock.sendall((cmd + "\n").encode('utf-8'))
+
+    def lire_reseau(self, timeout=0.05):
+        ready, _, _ = select.select([self.sock], [], [], timeout)
+        if ready:
             data = self.sock.recv(4096).decode('utf-8')
             if not data:
-                raise ConnectionError("Serveur déconnecté.")
+                sys.exit()
             self._buffer += data
-        line, self._buffer = self._buffer.split('\n', 1)
-        return line.strip()
 
-    def envoyer_query(self, cmd):
-        """Pour DENSITE, ELEMENTS, WARNING, SCORES — réponse garantie."""
-        self.sock.sendall((cmd + "\n").encode('utf-8'))
-        return self._readline()
+        lignes = []
+        while '\n' in self._buffer:
+            ligne, self._buffer = self._buffer.split('\n', 1)
+            lignes.append(ligne.strip())
+        return [l for l in lignes if l]
 
-    def envoyer_action(self, cmd):
-        """Pour les actions — tente de lire OK/NOK avec timeout court."""
-        self.sock.sendall((cmd + "\n").encode('utf-8'))
-        self.sock.settimeout(0.4)
-        try:
-            rep = self._readline()
-            return rep
-        except (socket.timeout, OSError):
-            self._buffer = ""  # vider le buffer si timeout
-            return None
-        finally:
-            self.sock.settimeout(None)
+    def requete(self, cmd):
+        self.envoyer(cmd)
+        while True:
+            for msg in self.lire_reseau(timeout=0.02):
+                if cmd in ["DENSITE", "ELEMENTS"] and len(msg) >= 288:
+                    return msg
+                elif cmd in ["WARNING", "SCORES"] and "|" in msg and "DEBUT_TOUR" not in msg:
+                    return msg
 
     def connecter(self):
         self.sock.connect(("127.0.0.1", 1234))
-        msg = self._readline()
-        if msg == "NOM_EQUIPE":
-            self.sock.sendall((self.equipe + "\n").encode('utf-8'))
-            rep = self._readline()
-            print(f"[Naif] Connecté : {rep}")
-            if "|" in rep:
-                try:
-                    self.mon_id = int(rep.split('|')[1].strip())
-                except ValueError:
-                    pass
-        self.boucle()
+        while True:
+            for msg in self.lire_reseau(timeout=0.1):
+                if msg == "NOM_EQUIPE":
+                    self.envoyer(self.equipe)
+                elif "êtes l'équipe" in msg:
+                    self.mon_id = int(msg.split('|')[1])
+                    self.boucle()
+                    return
 
     def boucle(self):
-        print("[Naif] En attente...")
         while True:
-            msg = self._readline()
-            if not msg or not msg.startswith("DEBUT_TOUR"):
-                continue
-
-            tour = msg.split('|')[1] if '|' in msg else "?"
-            print(f"[Naif] === Tour {tour} ===")
-
-            rep_densite = self.envoyer_query("DENSITE")
-            rep_elements = self.envoyer_query("ELEMENTS")
-            for i in range(HAUTEUR * LARGEUR):
-                l, c = divmod(i, LARGEUR)
-                self.plateau[(l, c)]['densite'] = int(rep_densite[i])
-                self.plateau[(l, c)]['element'] = rep_elements[i]
-
-            actions = 13  # 15 - 2 queries
-            cases_libres = [
-                (l, c) for (l, c), d in self.plateau.items() if d['element'] == 'X'
-            ]
-            cases_libres.sort(key=lambda coord: self.plateau[coord]['densite'], reverse=True)
-
-            for l, c in cases_libres:
-                if actions <= 0:
-                    break
-                rep = self.envoyer_action(f"AJOUTERRECOLTEUSE|{l}|{c}")
-                actions -= 1
-                if rep == "NOK":
-                    break  # plus d'argent
-
-            self.sock.sendall(("FINDETOUR\n").encode('utf-8'))
-            print(f"[Naif] FINDETOUR envoyé")
-
+            for msg in self.lire_reseau(timeout=0.1):
+                if msg.startswith("DEBUT_TOUR"):
+                    tour = msg.split('|')[1]
+                    print(f"[Naif] === Tour {tour} ===")
+                    
+                    rep_densite = self.requete("DENSITE")
+                    rep_elements = self.requete("ELEMENTS")
+                    scores_bruts = self.requete("SCORES").split('|')
+                    
+                    try: mon_budget = int(scores_bruts[self.mon_id])
+                    except: mon_budget = 0
+                    
+                    for i in range(HAUTEUR * LARGEUR):
+                        l, c = divmod(i, LARGEUR)
+                        self.plateau[(l, c)]['densite'] = int(rep_densite[i])
+                        self.plateau[(l, c)]['element'] = rep_elements[i]
+                    
+                    actions = 11
+                    cases_libres = [(l, c) for (l, c), d in self.plateau.items() if d['element'] == 'X']
+                    cases_libres.sort(key=lambda coord: self.plateau[coord]['densite'], reverse=True)
+                    
+                    for l, c in cases_libres:
+                        if actions <= 0 or mon_budget < PRIX_RECOLTEUSE: break
+                        self.envoyer(f"AJOUTERRECOLTEUSE|{l}|{c}")
+                        actions -= 1
+                        mon_budget -= PRIX_RECOLTEUSE
+                    
+                    self.envoyer("FINDETOUR")
 
 if __name__ == "__main__":
-    try:
-        BotNaif().connecter()
-    except (ConnectionResetError, ConnectionError) as e:
-        print(f"[Naif] Déconnecté : {e}")
-    except KeyboardInterrupt:
-        pass
+    BotNaif().connecter()
