@@ -28,7 +28,8 @@ log = logging.getLogger(__name__)
 
 COST_HARVESTER = 3000
 COST_FACTORY   = 5000
-COST_SABOTAGE  = 600
+COST_ORNI      = 400
+COST_SABOTAGE  = 500
 ORNI_REFRESH   = 4   # Renouveler toutes les 4 tours (orni dure 5 tours)
 
 # Cibles de récolteuses selon la phase

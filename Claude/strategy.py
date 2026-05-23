@@ -13,7 +13,7 @@ from game_state import (
 
 COST_HARVESTER = 3000
 COST_FACTORY   = 5000
-COST_SABOTAGE  = 600
+COST_SABOTAGE  = 500
 
 
 # ── Revenus ────────────────────────────────────────────────────────────────

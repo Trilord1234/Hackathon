@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 TEAM_NAME = "SpiceHunter"
 HOST = "127.0.0.1"
-PORT = 4000
+PORT = 1234
 
 
 class NetworkClient:
