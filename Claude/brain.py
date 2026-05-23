@@ -93,7 +93,8 @@ class Brain:
 
         # Secteurs dangereux
         dangerous = {s for s in range(4) if self.state.is_danger(s)}
-        condemned = set()  # secteurs qu'on va saboter (ne pas y aller)
+        # Pré-identifier les secteurs qu'on va saboter pour les exclure de la heatmap
+        condemned = self._preview_sabotage_targets(turn, phase)
 
         # ── 1. SURVIE ─────────────────────────────────────────────────────
         self._evacuate(dangerous)
@@ -325,6 +326,32 @@ class Brain:
                     moved_dests.add((nr, nc))
 
     # ── 6. Sabotage ────────────────────────────────────────────────────────
+
+    def _preview_sabotage_targets(self, turn: int, phase: str) -> set:
+        """Retourne les secteurs qu'on prévoit de saboter ce tour (sans les exécuter)."""
+        if self.budget < COST_SABOTAGE * 3:
+            return set()
+        targets = []
+        for sector in range(4):
+            if self.state.is_danger(sector):
+                continue
+            my = self.state.count_harvesters_in_sector(sector, self.player_id)
+            if my > 0:
+                continue
+            val = sabotage_value(self.state, sector)
+            if val <= 0:
+                continue
+            last = self.sabotaged.get(sector, -99)
+            if turn - last < 3:
+                continue
+            min_enemies = 1 if phase == 'LATE' else 2
+            enemy_count = self.state.count_harvesters_in_sector(sector) - my
+            if enemy_count < min_enemies:
+                continue
+            targets.append((val, sector))
+        targets.sort(reverse=True)
+        max_sabotages = 2 if phase == 'LATE' else 1
+        return {sector for _, sector in targets[:max_sabotages]}
 
     def _sabotage(self, turn: int, phase: str, condemned: set):
         """Sabote les secteurs ennemis les plus riches."""

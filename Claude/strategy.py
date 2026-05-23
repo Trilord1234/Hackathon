@@ -75,12 +75,15 @@ def marginal_income(state: GameState, r: int, c: int) -> float:
         # Notre gain sur cette case
         gain += prod / after
 
-        # Perte pour nos récolteuses voisines existantes (dilution)
-        for nr, nc in hex_neighbors(hr, hc):
-            if state.elements[nr][nc] == str(state.player_id) and (nr, nc) != (r, c):
-                # Cette récolteuse perd prod/before - prod/after
-                if before > 0:
-                    gain -= (prod / before - prod / after)
+        if before > 0:
+            dilution = prod / before - prod / after
+            # Perte pour la récolteuse alliée SUR cette case (elle se dilue aussi)
+            if state.elements[hr][hc] == str(state.player_id):
+                gain -= dilution
+            # Perte pour les récolteuses alliées VOISINES de cette case
+            for nr, nc in hex_neighbors(hr, hc):
+                if state.elements[nr][nc] == str(state.player_id) and (nr, nc) != (r, c):
+                    gain -= dilution
 
     return gain
 
@@ -126,10 +129,9 @@ def build_heatmap(state: GameState, turn: int, phase: str,
             if dist_to_factory <= 2:
                 score *= 1.5
 
-            # Bonus tactique: blocus industriel (se placer près d'usine ennemie)
-            if any(hex_distance(r, c, er, ec) <= 2 for er, ec in enemies
-                   if state.elements[er][ec] != str(state.player_id)):
-                score *= 1.2  # Plus prudent que x3 (risque de worm)
+            # Bonus pression: se placer dans la zone de récolteuses ennemies
+            if any(hex_distance(r, c, er, ec) <= 2 for er, ec in enemies):
+                score *= 1.2
 
             # Pénalité anti-clustering: trop de nos récolteuses dans ce secteur
             if allies_per_sector[sector] >= 5:

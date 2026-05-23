@@ -171,10 +171,12 @@ class GameState:
         }
 
     @property
-    def enemy_factories(self):
-        # Toutes les usines sont "neutres" visuellement mais on peut les
-        # considérer comme ennemies si on veut bloquer autour
-        return self.my_factories  # simplifié: toutes les usines connues
+    def all_factories(self):
+        """Toutes les usines visibles (le protocole ne distingue pas propriétaire)."""
+        return {
+            (r, c) for r in range(ROWS) for c in range(COLS)
+            if self.elements[r][c] == 'U'
+        }
 
     def is_free(self, r, c):
         return 0 <= r < ROWS and 0 <= c < COLS and self.elements[r][c] == 'X'

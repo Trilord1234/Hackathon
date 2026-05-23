@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 TEAM_NAME = "SpiceHunter"
 HOST = "127.0.0.1"
-PORT = 1234
+PORT = 4000
 
 
 class NetworkClient:
@@ -98,10 +98,12 @@ class NetworkClient:
 
 def main():
     team_name = sys.argv[1] if len(sys.argv) > 1 else TEAM_NAME
-    log.info(f"=== IA For The Spice | Équipe: {team_name} ===")
+    host      = sys.argv[2] if len(sys.argv) > 2 else HOST
+    port      = int(sys.argv[3]) if len(sys.argv) > 3 else PORT
+    log.info(f"=== IA For The Spice | Équipe: {team_name} | {host}:{port} ===")
 
     net = NetworkClient()
-    net.connect(HOST, PORT)
+    net.connect(host, port)
 
     player_id = -1
 
@@ -111,7 +113,12 @@ def main():
             log.debug(f"← {msg!r}")
             if msg == "NOM_EQUIPE":
                 net.send(team_name)
-            elif "équipe" in msg or "equipe" in msg.lower() or "|" in msg:
+            elif msg.strip().isdigit():
+                # Réponse directe: juste le player_id (ex: "2")
+                player_id = int(msg.strip())
+                log.info(f"Inscrit ! Player ID: {player_id}")
+            elif msg.upper().startswith("EQUIPE|") or msg.upper().startswith("BIENVENUE|"):
+                # Réponse type "EQUIPE|SpiceHunter|2"
                 try:
                     player_id = int(msg.split('|')[-1].strip())
                     log.info(f"Inscrit ! Player ID: {player_id}")
