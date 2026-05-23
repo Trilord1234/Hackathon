@@ -90,20 +90,36 @@ class SpiceBot:
                 self.envoyer_commande("FINDETOUR")
 
     def reflechir_et_agir(self, alertes_vers):
-        """
-        Logique de l'IA. Limite: 15 commandes max par tour. 5 secondes max.
-        Commandes utiles : 
-        - self.envoyer_commande("AJOUTERRECOLTEUSE|l|c")
-        - self.envoyer_commande("DEPLACER|l1|c1|l2|c2")
-        - self.envoyer_commande("AJOUTERORNI|secteur")
-        """
-        # Exemple de logique ultra basique : Placer un orni si on ne sait rien du secteur 0
-        if alertes_vers[0] == "INCONNU":
-            print("Action: Déploiement Orni Secteur 0")
-            self.envoyer_commande("AJOUTERORNI|0")
-            
-        # TODO : Parcourir self.plateau pour trouver la meilleure case 'X' avec la plus haute 'densite'
-        # TODO : Vérifier qu'on a l'argent (5000) et faire AJOUTERRECOLTEUSE
+    # 1. On liste nos récolteuses et leurs positions
+    mes_recolteuses = [(l, c) for (l, c), data in self.plateau.items() 
+                       if data['element'] == str(self.mon_id)]
+    
+    # 2. Vérifier si on se fait "Tricher" (un ennemi trop proche de nous)
+    ennemis_proches = []
+    for rl, rc in mes_recolteuses:
+        # Fonction imaginaire qui regarde les cases adjacentes
+        voisins = self.obtenir_voisins(rl, rc) 
+        for vl, vc in voisins:
+            element = self.plateau[(vl, vc)]['element']
+            if element in ['0', '1', '2', '3'] and element != str(self.mon_id):
+                ennemis_proches.append(element)
+    
+    # 3. PRISE DE DÉCISION (La théorie de l'Imitateur)
+    if ennemis_proches:
+        # MODE PUNITION (Triche)
+        # On consacre nos actions à bloquer/fuir l'ennemi qui nous colle
+        id_ennemi = ennemis_proches[0]
+        print(f"L'ennemi {id_ennemi} s'approche ! Mode Défense/Punition activé.")
+        # TODO: Coder la logique pour envoyer une commande DEPLACER vers l'ennemi
+        # self.envoyer_commande(f"DEPLACER|{...}")
+        
+    else:
+        # MODE COOPÉRATION (Vivre et laisser vivre)
+        # Personne ne nous embête, on maximise notre profit sereinement
+        meilleure_case = self.trouver_meilleure_case_epice_isolee()
+        if meilleure_case:
+            print(f"Zone calme. Récolte optimale sur {meilleure_case}.")
+            # TODO: Coder la logique pour AJOUTERRECOLTEUSE ou avancer vers la case
 
 if __name__ == "__main__":
     bot = SpiceBot(equipe="HackathonDiag")
