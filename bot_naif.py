@@ -73,7 +73,7 @@ class BotNaif:
                 if rep == "NOK":
                     break  # plus d'argent
 
-            self.envoyer("FINDETOUR")
+            self.sock.sendall(("FINDETOUR\n").encode("utf-8"))
 
 
 if __name__ == "__main__":

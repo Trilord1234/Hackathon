@@ -126,7 +126,7 @@ class BotCopycat:
                     if rep == "NOK":
                         break
 
-            self.envoyer("FINDETOUR")
+            self.sock.sendall(("FINDETOUR\n").encode("utf-8"))
 
 
 if __name__ == "__main__":

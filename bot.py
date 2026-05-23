@@ -128,7 +128,7 @@ class SpiceBotUltime:
             self.jouer_tour(alertes_vers)
 
             print(f"[*] Fin du tour. Actions restantes : {self.actions_restantes}")
-            self.envoyer("FINDETOUR")
+            self.sock.sendall(("FINDETOUR\n").encode("utf-8"))
 
     # ─────────────────────────────────────────────
     # CERVEAU : STRATÉGIE IMITATEUR
