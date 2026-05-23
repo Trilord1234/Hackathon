@@ -7,7 +7,7 @@ def distance(l1, c1, l2, c2):
 
 class BotAgressif:
     def __init__(self):
-        self.equipe = "Bot_Agressif"
+        self.equipe = "Agressif"
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.mon_id = -1
         self._buffer = ""

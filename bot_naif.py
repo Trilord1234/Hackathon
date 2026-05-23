@@ -4,7 +4,7 @@ HAUTEUR, LARGEUR = 16, 18
 
 class BotNaif:
     def __init__(self):
-        self.equipe = "Bot_Naif"
+        self.equipe = "Naif"
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.mon_id = -1
         self._buffer = ""

@@ -10,7 +10,7 @@ def distance(l1, c1, l2, c2):
 
 class BotCopycat:
     def __init__(self):
-        self.equipe = "Bot_Copycat"
+        self.equipe = "Copycat"
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.mon_id = -1
         self._buffer = ""
