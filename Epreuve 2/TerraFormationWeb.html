@@ -1,0 +1,1751 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terraformer Arrakis — Un Futur Au-Delà du Désert</title>
+<meta name="description" content="Projet officiel de terraformation d'Arrakis. Présenté à l'Empereur Padishah Shadam IV par la délégation de Liet Kynes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400;1,600&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ─── TOKENS ─────────────────────────────────────────────────── */
+:root {
+  --spice:       #e8911a;
+  --spice-dim:   #9a5c08;
+  --spice-glow:  rgba(232,145,26,0.25);
+  --sand-light:  #d4aa6a;
+  --sand-mid:    #9a7040;
+  --deep:        #120a03;
+  --surface:     #1e1005;
+  --stone:       #2d1a08;
+  --text:        #f0d9b5;
+  --text-dim:    #80604a;
+  --green:       #4a9e6e;
+  --green-light: #7bcca0;
+  --fremen:      #5a9ab5;
+  --fremen-dim:  #2a5a72;
+  --border:      rgba(232,145,26,0.12);
+  --border-hover:rgba(232,145,26,0.35);
+}
+
+/* ─── RESET & BASE ───────────────────────────────────────────── */
+*,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; font-size:16px; }
+body {
+  background: var(--deep);
+  color: var(--text);
+  font-family: 'Crimson Text', Georgia, serif;
+  overflow-x: hidden;
+  cursor: crosshair;
+}
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; font: inherit; }
+
+/* Grain overlay */
+body::after {
+  content:'';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ─── NAV ─────────────────────────────────────────────────────── */
+#nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.2rem 3.5rem;
+  transition: background 0.4s, border-bottom 0.4s;
+}
+#nav.solid {
+  background: rgba(18,10,3,0.96);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+}
+.nav-logo {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.55em;
+  color: var(--spice);
+  text-transform: uppercase;
+}
+.nav-links {
+  display: flex;
+  list-style: none;
+  gap: 3rem;
+}
+.nav-links a {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--sand-mid);
+  transition: color 0.25s;
+  position: relative;
+}
+.nav-links a::after {
+  content:'';
+  position:absolute;
+  bottom:-3px; left:0; right:0;
+  height:1px;
+  background: var(--spice);
+  transform: scaleX(0);
+  transition: transform 0.3s;
+}
+.nav-links a:hover { color: var(--spice); }
+.nav-links a:hover::after { transform: scaleX(1); }
+
+/* ─── HERO ────────────────────────────────────────────────────── */
+#hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  overflow: hidden;
+}
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(232,145,26,0.10) 0%, transparent 65%),
+    radial-gradient(ellipse 50% 40% at 20% 60%, rgba(155,90,20,0.07) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 80% 40%, rgba(90,154,181,0.04) 0%, transparent 60%),
+    linear-gradient(175deg, #0c0603 0%, #1e1005 45%, #2a1508 100%);
+}
+#particles { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+.p {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--sand-mid);
+  animation: pdrift linear infinite;
+  opacity: 0;
+}
+@keyframes pdrift {
+  0%   { opacity:0; transform:translate(0,0) rotate(0deg); }
+  8%   { opacity:0.7; }
+  92%  { opacity:0.2; }
+  100% { opacity:0; transform:translate(var(--dx), var(--dy)) rotate(360deg); }
+}
+.hero-dunes {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 42%;
+  pointer-events: none;
+}
+.hero-dunes svg { width:100%; height:100%; }
+
+.hero-content {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.hero-eyebrow {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.65em;
+  text-transform: uppercase;
+  color: var(--spice-dim);
+  margin-bottom: 1.8rem;
+  animation: fadeUp 1s 0.1s both;
+}
+.hero-title {
+  font-family: 'Cinzel', serif;
+  font-size: clamp(4.5rem, 14vw, 11rem);
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  line-height: 0.88;
+  background: linear-gradient(145deg, #c4904a 0%, var(--spice) 40%, var(--sand-light) 65%, #9a6030 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: fadeUp 1s 0.25s both;
+  filter: drop-shadow(0 0 60px rgba(232,145,26,0.15));
+}
+.hero-rule {
+  width: 120px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--spice), transparent);
+  margin: 1.8rem 0;
+  animation: fadeUp 1s 0.4s both;
+}
+.hero-subtitle {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: clamp(0.9rem, 2vw, 1.25rem);
+  font-weight: 300;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  color: var(--sand-mid);
+  animation: fadeUp 1s 0.5s both;
+}
+.hero-quote {
+  font-style: italic;
+  font-size: clamp(0.95rem, 1.5vw, 1.1rem);
+  color: var(--text-dim);
+  margin-top: 2.5rem;
+  max-width: 480px;
+  line-height: 1.65;
+  animation: fadeUp 1s 0.65s both;
+}
+.hero-quote cite {
+  display:block;
+  margin-top:0.5rem;
+  font-style:normal;
+  font-family:'Rajdhani',sans-serif;
+  font-size:0.72rem;
+  letter-spacing:0.25em;
+  text-transform:uppercase;
+  color: var(--spice-dim);
+}
+.hero-ctas {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 3rem;
+  animation: fadeUp 1s 0.8s both;
+}
+.btn {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  padding: 0.85rem 2.2rem;
+  transition: all 0.3s;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+}
+.btn-gold {
+  background: var(--spice);
+  color: #0c0603;
+}
+.btn-gold:hover {
+  background: var(--sand-light);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 35px rgba(232,145,26,0.35);
+}
+.btn-outline {
+  background: transparent;
+  color: var(--spice);
+  border: 1px solid rgba(232,145,26,0.45);
+}
+.btn-outline:hover {
+  background: rgba(232,145,26,0.08);
+  border-color: var(--spice);
+  transform: translateY(-2px);
+}
+
+.scroll-hint {
+  position: absolute;
+  bottom: 2.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  animation: fadeUp 1s 1.2s both;
+}
+.scroll-line {
+  width: 1px;
+  height: 55px;
+  background: linear-gradient(to bottom, var(--spice), transparent);
+  animation: scrollPulse 2.2s ease-in-out infinite;
+}
+.scroll-text {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+@keyframes scrollPulse {
+  0%,100% { opacity:0.3; }
+  50%      { opacity:1; }
+}
+@keyframes fadeUp {
+  from { opacity:0; transform:translateY(28px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+/* ─── SECTIONS COMMON ─────────────────────────────────────────── */
+section { padding: 7rem 0; position: relative; }
+.container { max-width: 1180px; margin: 0 auto; padding: 0 2.5rem; }
+
+.eyebrow {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.55em;
+  text-transform: uppercase;
+  color: var(--spice);
+  margin-bottom: 0.8rem;
+}
+.sec-title {
+  font-family: 'Cinzel', serif;
+  font-size: clamp(2rem, 4.5vw, 3.2rem);
+  font-weight: 700;
+  color: var(--sand-light);
+  line-height: 1.1;
+  margin-bottom: 1.2rem;
+}
+.sec-rule {
+  width: 70px;
+  height: 2px;
+  background: linear-gradient(to right, var(--spice), transparent);
+  margin-bottom: 2rem;
+}
+.sec-rule.green { background: linear-gradient(to right, var(--green), transparent); }
+.sec-intro {
+  font-size: 1.15rem;
+  line-height: 1.72;
+  color: var(--text-dim);
+  max-width: 680px;
+  margin-bottom: 3.5rem;
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.75s ease, transform 0.75s ease;
+}
+.reveal.vis { opacity:1; transform:none; }
+.reveal-delay { transition-delay: 0.15s; }
+.reveal-delay2 { transition-delay: 0.3s; }
+
+/* ─── SECTION A — ÉTAT DES LIEUX ─────────────────────────────── */
+#section-a {
+  background: linear-gradient(160deg, #18090402 0%, #1e1005 30%, #22120740 100%);
+}
+.conditions-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 4rem;
+  align-items: center;
+  margin-bottom: 5rem;
+}
+.cond-text h3 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.55rem;
+  color: var(--sand-light);
+  margin-bottom: 1.2rem;
+}
+.cond-text p {
+  font-size: 1.08rem;
+  line-height: 1.72;
+  color: var(--text-dim);
+  margin-bottom: 1rem;
+}
+.cond-text p strong { color: var(--text); }
+.stats-row {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+}
+.stat-blk {
+  flex: 1;
+  min-width: 110px;
+  padding: 1.1rem 1.3rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--spice);
+  background: rgba(0,0,0,0.2);
+}
+.stat-blk .v {
+  display: block;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--spice);
+}
+.stat-blk .l {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* Storm SVG visual */
+.storm-visual { display:flex; align-items:center; justify-content:center; }
+.storm-wrap { width:100%; max-width:420px; }
+.storm-wrap svg { overflow:visible; }
+
+/* Live API Dashboard */
+.api-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+.api-header h3 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.7rem;
+  color: var(--sand-light);
+}
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid rgba(232,145,26,0.35);
+  background: rgba(232,145,26,0.07);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--spice);
+}
+.live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--spice);
+  animation: blink 1.6s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.15;} }
+
+.sietch-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+.sietch-card {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.015);
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s, background 0.3s;
+}
+.sietch-card::before {
+  content:'';
+  position:absolute;
+  top:0; left:0; right:0;
+  height:2px;
+  background: linear-gradient(90deg, var(--spice), transparent 70%);
+}
+.sietch-card:hover {
+  border-color: var(--border-hover);
+  background: rgba(232,145,26,0.025);
+}
+.sc-head {
+  padding: 1.4rem 1.4rem 0.8rem;
+}
+.sc-name {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  color: var(--sand-light);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.sc-sub {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-top: 0.15rem;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: rgba(255,255,255,0.05);
+  margin: 0.8rem 1.4rem;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.metric {
+  padding: 0.85rem 0.7rem;
+  background: rgba(0,0,0,0.35);
+  text-align: center;
+}
+.metric.full { grid-column: span 2; }
+.metric-val {
+  display: block;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--spice);
+  letter-spacing: 0.03em;
+}
+.metric.wind .metric-val { color: var(--fremen); }
+.metric.hygro .metric-val { color: var(--green); }
+.metric-lbl {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.webcam-wrap {
+  margin: 0 1.4rem 1.4rem;
+  position: relative;
+  aspect-ratio: 16/9;
+  background: rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+.webcam-wrap img {
+  width:100%; height:100%;
+  object-fit: cover;
+  opacity: 0.9;
+}
+.cam-badge {
+  position: absolute;
+  top: 0.5rem; left: 0.5rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.58rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--spice);
+  background: rgba(0,0,0,0.72);
+  padding: 0.18rem 0.5rem;
+}
+.cam-live-dot {
+  display: inline-block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #ff4444;
+  margin-right: 0.3rem;
+  animation: blink 1.2s ease-in-out infinite;
+  vertical-align: middle;
+}
+.refresh-note {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-align: right;
+  margin-top: 1.2rem;
+  letter-spacing: 0.08em;
+}
+
+/* ─── SECTION B — ACTEURS & TECHNOLOGIES ─────────────────────── */
+#section-b {
+  background: linear-gradient(180deg, #1a0c05 0%, #160b04 100%);
+  border-top: 1px solid var(--border);
+}
+
+.actors-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.2rem;
+  margin-bottom: 5rem;
+}
+.actor-card {
+  border: 1px solid var(--border);
+  padding: 1.8rem;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.35s;
+}
+.actor-card::after {
+  content:'';
+  position:absolute;
+  inset:0;
+  background: radial-gradient(ellipse at 50% 110%, rgba(232,145,26,0.06) 0%, transparent 65%);
+  opacity:0;
+  transition: opacity 0.4s;
+}
+.actor-card:hover { border-color: var(--border-hover); transform: translateY(-3px); }
+.actor-card:hover::after { opacity:1; }
+.actor-card.fremen { border-color: rgba(90,154,181,0.15); }
+.actor-card.fremen::after { background: radial-gradient(ellipse at 50% 110%, rgba(90,154,181,0.06) 0%, transparent 65%); }
+.actor-card.fremen:hover { border-color: rgba(90,154,181,0.4); }
+.actor-icon { font-size:1.6rem; margin-bottom:1rem; display:block; }
+.actor-role {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--spice);
+  margin-bottom: 0.5rem;
+}
+.actor-card.fremen .actor-role { color: var(--fremen); }
+.actor-name {
+  font-family: 'Cinzel', serif;
+  font-size: 1.18rem;
+  color: var(--sand-light);
+  margin-bottom: 0.9rem;
+}
+.actor-desc {
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--text-dim);
+}
+
+/* Tech cards */
+.tech-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 1rem;
+}
+.tech-section-title {
+  font-family: 'Cinzel', serif;
+  font-size: 1.8rem;
+  color: var(--sand-light);
+}
+.tech-note {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+.tech-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+.tech-card {
+  border: 1px solid var(--border);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+.tech-card:hover { border-color: var(--border-hover); }
+.tech-card-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.1rem 1.3rem;
+  background: rgba(0,0,0,0.28);
+  user-select: none;
+}
+.tech-ico {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+  background: rgba(232,145,26,0.08);
+  border: 1px solid rgba(232,145,26,0.18);
+  flex-shrink: 0;
+}
+.tech-lbl {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--sand-light);
+  flex: 1;
+}
+.tech-toggle-icon {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--spice);
+  transition: transform 0.3s;
+  flex-shrink: 0;
+}
+.tech-card.open .tech-toggle-icon { transform: rotate(180deg); }
+.tech-body {
+  display: none;
+  padding: 1.2rem 1.3rem;
+  border-top: 1px solid var(--border);
+}
+.tech-body p {
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--text-dim);
+  margin-bottom: 1rem;
+}
+.tech-rows { border-top: 1px solid rgba(255,255,255,0.05); }
+.tech-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.48rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.82rem;
+}
+.tech-row-lbl { color: var(--text-dim); }
+.tech-row-val { color: var(--spice); font-weight: 600; }
+
+/* ─── SECTION C — PROJECTION VERTE ───────────────────────────── */
+#section-c {
+  background: linear-gradient(180deg, #160b04 0%, #0e1a0f 60%, #0c1810 100%);
+  border-top: 1px solid var(--border);
+}
+
+/* Transition slider */
+.slider-intro h3 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.5rem;
+  color: var(--sand-light);
+  margin-bottom: 0.6rem;
+}
+.slider-intro p {
+  font-size: 0.95rem;
+  color: var(--text-dim);
+  margin-bottom: 1.5rem;
+}
+.trans-visual {
+  position: relative;
+  width: 100%;
+  height: 360px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  cursor: ew-resize;
+  user-select: none;
+}
+.layer-d {
+  position: absolute; inset: 0;
+}
+.layer-d svg, .layer-g svg { width:100%; height:100%; }
+.layer-g {
+  position: absolute; inset: 0;
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 0.05s linear;
+}
+.slider-blade {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 0;
+  width: 2px;
+  background: rgba(255,255,255,0.9);
+  pointer-events: none;
+}
+.slider-blade::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 36px; height: 36px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 0 24px rgba(0,0,0,0.5);
+}
+.slider-blade::after {
+  content: '◀ ▶';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.55rem;
+  color: #333;
+  letter-spacing: 0.08em;
+}
+.year-badge {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  color: white;
+  background: rgba(0,0,0,0.5);
+  padding: 0.3rem 1.2rem;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+.trans-label {
+  position: absolute;
+  bottom: 1rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  background: rgba(0,0,0,0.55);
+  padding: 0.25rem 0.7rem;
+  pointer-events: none;
+}
+.tl-d { left:1rem; color:var(--spice); }
+.tl-g { right:1rem; color:var(--green-light); }
+
+input[type=range]#transRange {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(to right, var(--spice), var(--green-light));
+  outline: none;
+  margin-top: 1rem;
+  cursor: ew-resize;
+}
+input[type=range]#transRange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: white;
+  cursor: ew-resize;
+  box-shadow: 0 0 8px rgba(0,0,0,0.4);
+}
+.range-labels {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  margin-top: 0.5rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* Spice section */
+.spice-block {
+  background: rgba(232,145,26,0.025);
+  border: 1px solid rgba(232,145,26,0.18);
+  border-left: 4px solid var(--spice);
+  padding: 3rem;
+  margin-top: 4rem;
+}
+.spice-block h3 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.75rem;
+  color: var(--spice);
+  margin-bottom: 0.4rem;
+}
+.spice-block .sub {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 2rem;
+}
+.spice-lead {
+  font-size: 1.12rem;
+  line-height: 1.75;
+  color: var(--text);
+  margin-bottom: 2.5rem;
+  max-width: 820px;
+}
+.spice-lead strong { color: var(--green-light); }
+
+.args-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.2rem;
+  margin-bottom: 2.5rem;
+}
+.arg-card {
+  padding: 1.5rem;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.arg-card h4 {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--spice);
+  margin-bottom: 0.8rem;
+}
+.arg-card p {
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--text-dim);
+}
+.arg-card p strong { color: var(--text); }
+
+/* Zone map */
+.zone-lbl {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--spice);
+  margin: 2rem 0 0.5rem;
+}
+.zone-map-svg { width:100%; border: 1px solid var(--border); }
+
+/* Chart */
+.chart-lbl {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--spice);
+  margin: 2rem 0 0.4rem;
+}
+.chart-sub {
+  font-size: 0.88rem;
+  color: var(--text-dim);
+  margin-bottom: 1.2rem;
+}
+.bar-chart {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+  height: 180px;
+  border-left: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding: 0 1rem 0 0.5rem;
+}
+.bar-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.bar-cluster { display:flex; gap:3px; align-items:flex-end; height:145px; }
+.bar-item { width:18px; border-radius:2px 2px 0 0; }
+.bar-item.s { background: var(--spice); }
+.bar-item.p { background: var(--fremen); }
+.bar-item.r { background: var(--green); }
+.bar-year {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+}
+.legend {
+  display: flex;
+  gap: 2rem;
+  margin-top: 1rem;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+.legend-dot { width:10px; height:10px; border-radius:1px; }
+
+.conclusion {
+  background: linear-gradient(120deg, rgba(74,158,110,0.08), rgba(232,145,26,0.04));
+  border: 1px solid rgba(74,158,110,0.3);
+  border-left: 4px solid var(--green);
+  padding: 2rem;
+  margin-top: 2.5rem;
+}
+.conclusion h4 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.2rem;
+  color: var(--green-light);
+  margin-bottom: 0.9rem;
+}
+.conclusion p {
+  font-size: 1.05rem;
+  line-height: 1.75;
+  color: var(--text-dim);
+}
+.conclusion p strong { color: var(--text); }
+
+/* ─── FOOTER ──────────────────────────────────────────────────── */
+footer {
+  background: #0a0602;
+  border-top: 1px solid var(--border);
+  padding: 4rem 2.5rem;
+  text-align: center;
+}
+.footer-logo {
+  font-family: 'Cinzel', serif;
+  font-size: 1.4rem;
+  font-weight: 900;
+  letter-spacing: 0.4em;
+  background: linear-gradient(to right, var(--sand-mid), var(--spice), var(--sand-mid));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.6rem;
+}
+.footer-quote {
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--text-dim);
+  margin-bottom: 2rem;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.footer-meta {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #3a2515;
+}
+
+/* ─── RESPONSIVE ──────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  #nav { padding: 1rem 1.5rem; }
+  .nav-links { gap: 1.5rem; }
+  .conditions-grid { grid-template-columns: 1fr; gap: 2rem; }
+  .sietch-grid { grid-template-columns: 1fr; }
+  .actors-grid { grid-template-columns: 1fr 1fr; }
+  .tech-grid { grid-template-columns: 1fr 1fr; }
+  .args-grid { grid-template-columns: 1fr; }
+  .hero-ctas { flex-direction: column; align-items: center; }
+  section { padding: 5rem 0; }
+}
+@media (max-width: 600px) {
+  .actors-grid { grid-template-columns: 1fr; }
+  .tech-grid { grid-template-columns: 1fr; }
+  .spice-block { padding: 1.8rem; }
+  .tech-header-row { flex-direction: column; gap: 0.4rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════ NAV ══════════════════════ -->
+<nav id="nav">
+  <div class="nav-logo">· Arrakis ·</div>
+  <ul class="nav-links">
+    <li><a href="#section-a">État des Lieux</a></li>
+    <li><a href="#section-b">Acteurs & Technologies</a></li>
+    <li><a href="#section-c">Projection Verte</a></li>
+  </ul>
+</nav>
+
+<!-- ══════════════════════ HERO ══════════════════════ -->
+<section id="hero">
+  <div class="hero-bg"></div>
+  <div id="particles"></div>
+
+  <!-- Dunes -->
+  <div class="hero-dunes">
+    <svg viewBox="0 0 1440 260" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+      <path d="M0,180 C200,140 380,195 580,158 C780,121 1000,185 1200,145 C1330,120 1400,160 1440,148 L1440,260 L0,260Z" fill="rgba(45,26,8,0.5)"/>
+      <path d="M0,210 C160,185 340,225 540,198 C740,171 960,218 1150,188 C1300,165 1400,210 1440,200 L1440,260 L0,260Z" fill="rgba(30,16,5,0.75)"/>
+      <path d="M0,238 C200,222 450,248 750,232 C1000,218 1200,244 1440,230 L1440,260 L0,260Z" fill="#1e1005"/>
+    </svg>
+  </div>
+
+  <div class="hero-content">
+    <div class="hero-eyebrow">· Projet de Terraformation Impériale ·</div>
+    <h1 class="hero-title">ARRAKIS</h1>
+    <div class="hero-rule"></div>
+    <div class="hero-subtitle">Un Futur, Au-Delà du Désert</div>
+    <blockquote class="hero-quote">
+      "L'épice n'est pas une fin, mais un commencement."
+      <cite>— Pardot Kynes, Planétologue Impérial</cite>
+    </blockquote>
+    <div class="hero-ctas">
+      <a href="#section-a" class="btn btn-gold">Découvrir le Projet</a>
+      <a href="#api-live" class="btn btn-outline">Données en Direct</a>
+    </div>
+  </div>
+
+  <div class="scroll-hint">
+    <div class="scroll-line"></div>
+    <span class="scroll-text">Défiler</span>
+  </div>
+</section>
+
+<!-- ══════════════════════ SECTION A ══════════════════════ -->
+<section id="section-a">
+  <div class="container">
+
+    <div class="reveal">
+      <div class="eyebrow">Section I — L'État des Lieux</div>
+      <h2 class="sec-title">Arrakis Actuelle :<br>La Réalité du Désert</h2>
+      <div class="sec-rule"></div>
+      <p class="sec-intro">Avant de rêver à l'avenir, il faut regarder la réalité en face. Arrakis est l'enfer de sable le plus hostile de l'Imperium connu — mais un enfer qui obéit à des lois. Et les lois, elles, peuvent être amendées.</p>
+    </div>
+
+    <!-- Conditions -->
+    <div class="conditions-grid reveal reveal-delay">
+      <div class="cond-text">
+        <h3>Une planète à la limite du vivable</h3>
+        <p>Arrakis est la planète la plus aride de l'Imperium. <strong>Aucune précipitation naturelle</strong> ne tombe dans les zones équatoriales. L'hygrométrie ambiante descend sous le seuil de 1% dans le Grand Erg — là où le sable vit et les hommes meurent.</p>
+        <p>Les <strong>tempêtes de Coriolis</strong> balayent les zones ouvertes à des vitesses dépassant 700 km/h. Elles réduisent le métal en poudre, le roc en sable, l'homme sans distille en squelette blanchi en moins d'une minute.</p>
+        <p>Les Fremens ont survécu en développant une culture de <strong>l'eau au gramme près</strong> : distilles récupérant la sueur et le souffle, sietcths souterraines comme unique habitat pérenne, et une discipline collective qui force le respect. Leur survie prouve que la vie est possible. Notre projet prouvera qu'elle peut s'épanouir.</p>
+        <div class="stats-row">
+          <div class="stat-blk">
+            <span class="v">70°C</span>
+            <span class="l">Température de surface max.</span>
+          </div>
+          <div class="stat-blk">
+            <span class="v">&lt;1%</span>
+            <span class="l">Hygrométrie moyenne</span>
+          </div>
+          <div class="stat-blk">
+            <span class="v">700+</span>
+            <span class="l">km/h — Tempêtes Coriolis</span>
+          </div>
+          <div class="stat-blk">
+            <span class="v">10mm</span>
+            <span class="l">Précipitations / an (zones polaires)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Storm visual SVG -->
+      <div class="storm-visual">
+        <svg viewBox="0 0 420 370" xmlns="http://www.w3.org/2000/svg" class="storm-wrap">
+          <defs>
+            <radialGradient id="sg" cx="50%" cy="45%" r="50%">
+              <stop offset="0%" stop-color="#e8911a" stop-opacity="0.28"/>
+              <stop offset="100%" stop-color="#120a03" stop-opacity="0"/>
+            </radialGradient>
+            <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="soft"><feGaussianBlur stdDeviation="2"/></filter>
+          </defs>
+          <rect width="420" height="370" fill="#18090a"/>
+          <!-- Sky streaks -->
+          <g opacity="0.18" filter="url(#soft)">
+            <line x1="0" y1="75"  x2="420" y2="90"  stroke="#e8911a" stroke-width="2"/>
+            <line x1="0" y1="105" x2="420" y2="115" stroke="#d4aa6a" stroke-width="1"/>
+            <line x1="0" y1="130" x2="420" y2="145" stroke="#e8911a" stroke-width="3"/>
+            <line x1="0" y1="165" x2="420" y2="172" stroke="#d4aa6a" stroke-width="1"/>
+            <line x1="0" y1="195" x2="420" y2="185" stroke="#e8911a" stroke-width="1.5"/>
+          </g>
+          <!-- Storm circle -->
+          <circle cx="210" cy="155" r="130" fill="url(#sg)"/>
+          <circle cx="210" cy="155" r="90"  fill="none" stroke="rgba(232,145,26,0.12)" stroke-width="1"/>
+          <circle cx="210" cy="155" r="55"  fill="none" stroke="rgba(232,145,26,0.08)" stroke-width="0.8"/>
+          <!-- Animated wind streaks -->
+          <style>
+            .ws { animation: ws 3s ease-in-out infinite; transform-origin: 210px 155px; }
+            @keyframes ws { 0%,100%{opacity:0.35;} 50%{opacity:0.7;} }
+          </style>
+          <g class="ws">
+            <line x1="40"  y1="125" x2="155" y2="118" stroke="#e8911a" stroke-width="1.8"/>
+            <line x1="55"  y1="148" x2="165" y2="142" stroke="#e8911a" stroke-width="1"/>
+            <line x1="255" y1="118" x2="385" y2="108" stroke="#e8911a" stroke-width="2.2"/>
+            <line x1="248" y1="148" x2="390" y2="138" stroke="#e8911a" stroke-width="1"/>
+          </g>
+          <!-- Sun -->
+          <circle cx="330" cy="55" r="35" fill="rgba(232,145,26,0.1)" filter="url(#soft)"/>
+          <circle cx="330" cy="55" r="20" fill="rgba(232,145,26,0.2)"/>
+          <circle cx="330" cy="55" r="11" fill="rgba(255,200,80,0.35)" filter="url(#glow)"/>
+          <!-- Dunes -->
+          <path d="M0,255 C90,228 175,268 265,242 C348,218 390,250 420,238 L420,370 L0,370Z" fill="#3d2010"/>
+          <path d="M0,285 C110,265 215,298 330,278 C375,268 400,285 420,280 L420,370 L0,370Z" fill="#2a1508"/>
+          <path d="M0,315 C180,300 290,325 420,305 L420,370 L0,370Z" fill="#1e1005"/>
+          <!-- Label -->
+          <text x="210" y="345" text-anchor="middle" fill="rgba(232,145,26,0.3)" font-family="Rajdhani,sans-serif" font-size="9" letter-spacing="4">TEMPÊTE DE CORIOLIS — ZONE OUVERTE</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- LIVE API -->
+    <div id="api-live" class="reveal">
+      <div class="api-header">
+        <h3>Données en Temps Réel des Sietcths</h3>
+        <div class="live-pill"><div class="live-dot"></div>En Direct</div>
+      </div>
+      <p class="sec-intro" style="margin-bottom:2rem;">Nos 70 stations écologiques collectent en continu les données atmosphériques de trois sietcths stratégiques. Ces chiffres sont la réalité brute d'Arrakis — et la preuve que nous la comprenons assez bien pour la changer.</p>
+
+      <div class="sietch-grid">
+        <!-- HABBANYA -->
+        <div class="sietch-card">
+          <div class="sc-head">
+            <div class="sc-name">Habbanya</div>
+            <div class="sc-sub">Ridge Sietch · Zone Centrale</div>
+          </div>
+          <div class="metrics">
+            <div class="metric temp">
+              <span class="metric-val" id="tv-habbanya">—</span>
+              <span class="metric-lbl">Température</span>
+            </div>
+            <div class="metric wind">
+              <span class="metric-val" id="wv-habbanya">—</span>
+              <span class="metric-lbl">Vent</span>
+            </div>
+            <div class="metric hygro full">
+              <span class="metric-val" id="hv-habbanya">—</span>
+              <span class="metric-lbl">Hygrométrie</span>
+            </div>
+          </div>
+          <div class="webcam-wrap">
+            <img id="cam-habbanya" src="https://iutdijon.u-bourgogne.fr/intra/iq/webservices/arrakis/webcam.php?lieu=habbanya" alt="Vue Habbanya" onerror="this.parentElement.style.display='none'">
+            <div class="cam-badge"><span class="cam-live-dot"></span>CAM LIVE · HABBANYA</div>
+          </div>
+        </div>
+
+        <!-- MAKAB -->
+        <div class="sietch-card">
+          <div class="sc-head">
+            <div class="sc-name">Makab</div>
+            <div class="sc-sub">Sietch Meridional · Zone Désertique</div>
+          </div>
+          <div class="metrics">
+            <div class="metric temp">
+              <span class="metric-val" id="tv-makab">—</span>
+              <span class="metric-lbl">Température</span>
+            </div>
+            <div class="metric wind">
+              <span class="metric-val" id="wv-makab">—</span>
+              <span class="metric-lbl">Vent</span>
+            </div>
+            <div class="metric hygro full">
+              <span class="metric-val" id="hv-makab">—</span>
+              <span class="metric-lbl">Hygrométrie</span>
+            </div>
+          </div>
+          <div class="webcam-wrap">
+            <img id="cam-makab" src="https://iutdijon.u-bourgogne.fr/intra/iq/webservices/arrakis/webcam.php?lieu=makab" alt="Vue Makab" onerror="this.parentElement.style.display='none'">
+            <div class="cam-badge"><span class="cam-live-dot"></span>CAM LIVE · MAKAB</div>
+          </div>
+        </div>
+
+        <!-- NORD -->
+        <div class="sietch-card">
+          <div class="sc-head">
+            <div class="sc-name">Nord</div>
+            <div class="sc-sub">Sietch Polaire · Zone Tempérée</div>
+          </div>
+          <div class="metrics">
+            <div class="metric temp">
+              <span class="metric-val" id="tv-nord">—</span>
+              <span class="metric-lbl">Température</span>
+            </div>
+            <div class="metric wind">
+              <span class="metric-val" id="wv-nord">—</span>
+              <span class="metric-lbl">Vent</span>
+            </div>
+            <div class="metric hygro full">
+              <span class="metric-val" id="hv-nord">—</span>
+              <span class="metric-lbl">Hygrométrie</span>
+            </div>
+          </div>
+          <div class="webcam-wrap">
+            <img id="cam-nord" src="https://iutdijon.u-bourgogne.fr/intra/iq/webservices/arrakis/webcam.php?lieu=nord" alt="Vue Nord" onerror="this.parentElement.style.display='none'">
+            <div class="cam-badge"><span class="cam-live-dot"></span>CAM LIVE · NORD</div>
+          </div>
+        </div>
+      </div>
+      <div class="refresh-note" id="refresh-note">Chargement des données…</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════════ SECTION B ══════════════════════ -->
+<section id="section-b">
+  <div class="container">
+
+    <div class="reveal">
+      <div class="eyebrow">Section II — Les Acteurs & Technologies</div>
+      <h2 class="sec-title">Une Alliance entre<br>Science et Désert</h2>
+      <div class="sec-rule"></div>
+      <p class="sec-intro">Ce projet n'est pas l'œuvre d'un seul homme. C'est la rencontre entre la rigueur scientifique impériale et une sagesse ancestrale forgée par des millénaires de survie dans le sable.</p>
+    </div>
+
+    <!-- Actors -->
+    <div class="actors-grid reveal reveal-delay">
+
+      <div class="actor-card">
+        <span class="actor-icon">🔬</span>
+        <div class="actor-role">Planétologue Impérial</div>
+        <div class="actor-name">Pardot Kynes</div>
+        <div class="actor-desc">Père du rêve. Envoyé par l'Imperium pour cartographier Arrakis, Kynes a transcendé son mandat : il a convaincu les tribus Fremens de la faisabilité d'une terraformation sur 300 ans et établi 90 stations scientifiques clandestines à travers la planète. Son œuvre est notre fondation.</div>
+      </div>
+
+      <div class="actor-card">
+        <span class="actor-icon">🌿</span>
+        <div class="actor-role">Planétologue &amp; Successeure</div>
+        <div class="actor-name">Liet Kynes</div>
+        <div class="actor-desc">Fille de Pardot, née sur Arrakis, aimée des Fremens. Elle porte en elle les deux cultures : la rigueur scientifique de la planétologie impériale et l'âme fremen. Coordinatrice opérationnelle des 70 stations actives, elle supervise le déploiement des pièges à vent et les projections à long terme.</div>
+      </div>
+
+      <div class="actor-card fremen">
+        <span class="actor-icon">⚔️</span>
+        <div class="actor-role">Naib · Sietch Tabr</div>
+        <div class="actor-name">Stilgar</div>
+        <div class="actor-desc">Chef militaire du Sietch Tabr et pilier de la résistance Fremene. Bras armé du projet sur le terrain, Stilgar protège les stations de test contre les raids Harkonnen et garantit l'adhésion des tribus. Sa légitimité culturelle est irremplaçable pour mobiliser les 10 millions de Fremens.</div>
+      </div>
+
+      <div class="actor-card fremen">
+        <span class="actor-icon">👁️</span>
+        <div class="actor-role">Force Collective</div>
+        <div class="actor-name">Les Tribus Fremens</div>
+        <div class="actor-desc">Plus de 60 tribus — soit environ 10 millions de personnes — ont secrètement adopté le projet Kynes. Chaque Fremen plante, soigne, préserve. Leur connaissance du désert, des vents, des nappes souterraines et des cycles des vers constitue une base de données vivante que nul ordinateur impérial ne peut égaler.</div>
+      </div>
+
+      <div class="actor-card">
+        <span class="actor-icon">🚀</span>
+        <div class="actor-role">Partenaire Logistique</div>
+        <div class="actor-name">La Guilde Spatiale</div>
+        <div class="actor-desc">Pragmatiques et dépendants de l'Épice pour le voyage entre les étoiles, les Navigateurs de la Guilde sont des alliés discrets. Ils approvisionnent le projet en matériaux hors-monde et leur intérêt à long terme converge avec le nôtre : une production d'Épice augmentée sur une planète plus stable.</div>
+      </div>
+
+      <div class="actor-card">
+        <span class="actor-icon">👑</span>
+        <div class="actor-role">Décideur Suprême</div>
+        <div class="actor-name">L'Empereur Padishah</div>
+        <div class="actor-desc">Votre Majesté détient seule le pouvoir d'autoriser officiellement le projet à l'échelle impériale. Son accord garantirait les ressources nécessaires à l'accélération du programme : 200 ans au lieu de 400, sous tutelle impériale directe. Ce site lui est respectueusement dédié.</div>
+      </div>
+
+    </div>
+
+    <!-- Technologies -->
+    <div class="reveal">
+      <div class="tech-header-row">
+        <h3 class="tech-section-title">Arsenal Technologique</h3>
+        <span class="tech-note">Cliquez pour développer</span>
+      </div>
+      <div class="sec-rule"></div>
+      <p style="font-size:1rem; color:var(--text-dim); margin-bottom:2rem; max-width:680px;">Pardot Kynes a développé, au fil de trente années de recherche sur le terrain, un arsenal technique adapté aux conditions extrêmes d'Arrakis. Six technologies clés, complémentaires, forment le cœur du projet.</p>
+
+      <div class="tech-grid">
+
+        <div class="tech-card" onclick="toggleTech(this)">
+          <div class="tech-card-head">
+            <div class="tech-ico">💧</div>
+            <div class="tech-lbl">Pièges à Vent</div>
+            <span class="tech-toggle-icon">▼</span>
+          </div>
+          <div class="tech-body">
+            <p>Les pièges à vent (<em>windtraps</em>) exploitent les écarts thermiques jour/nuit pour condenser l'humidité atmosphérique, même à des taux d'hygrométrie de 0,5%. Semi-enterrés pour les protéger des tempêtes, ils sont la colonne vertébrale de l'approvisionnement en eau du projet.</p>
+            <div class="tech-rows">
+              <div class="tech-row"><span class="tech-row-lbl">Production par unité</span><span class="tech-row-val">3,4 L / jour</span></div>
+              <div class="tech-row"><span class="tech-row-lbl">Unités actuellement déployées</span><span class="tech-row-val">~12 000</span></div>
+              <div class="tech-row"><span class="tech-row-lbl">Production totale / jour</span><span class="tech-row-val">~40 800 litres</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tech-card" onclick="toggleTech(this)">
+          <div class="tech-card-head">
+            <div class="tech-ico">🌱</div>
+            <div class="tech-lbl">Plantation Profonde</div>
+            <span class="tech-toggle-icon">▼</span>
+          </div>
+          <div class="tech-body">
+            <p>Des espèces végétales ultra-résistantes sélectionnées pour leur capacité à survivre sans eau pendant 10 ans : <em>poverty grasses</em>, <em>scotch broom</em>, <em>mesquite</em>, <em>camel sage</em>. Plantées à 3 mètres de profondeur, elles fixent le sable, créent les premières zones d'ombre et initient le cycle d'accumulation d'humidité.</p>
+            <div class="tech-rows">
+              <div class="tech-row"><span class="tech-row-lbl">Survie sans apport en eau</span><span class="tech-row-val">10 ans</span></div>
+              <div class="tech-row"><span class="tech-row-lbl">Fixation du sable par ha</span><span class="tech-row-val">95%</span></div>
+              <div class="tech-row"><span class="tech-row-lbl">Sites de plantation actifs</span><span class="tech-row-val">340 zones polaires</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tech-card" onclick="toggleTech(this)">
+          <div class="tech-card-head">
+            <div class="tech-ico">🏔️</div>
+            <div class="tech-lbl">Brise-Vents & Mulchs</div>
+            <span class="tech-toggle-icon">▼</span>
+          </div>
+          <div class="tech-body">
+            <p>Des alignements de pierres naturelles construits selon les modèles de vents Coriolis créent des zones microclimats protégées où la végétation peut s'établir. Couplés à des mulchs de sable traité, ils réduisent l'évaporation de surface de 70% — transformant chaque goutte d'eau collectée en agent de changement durable.</p>
+            <div class="tech-rows">
+              <div class="tech-row"><span class="tech-row-lbl">Réduction de l'évaporation</span><span class="tech-row-val">70%</span></div>
+              <div class="tech-row"><span class="tech-row-lbl">Zone protégée par mur</span><span class="tech-row-val">5 ha</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tech-card" onclick="toggleTech(this)">
+          <div class="tech-card-head">
+            <div class="tech-ico">🗺️</div>
+            <div class="tech-lbl">Stations Écologiques</div>
+            <span class="tech-toggle-icon">▼</span>
+          </div>
+          <div class="tech-body">
+            <p>70 stations scientifiques clandestines mesurent en continu température, humidité, progression végétale et position des vers de sable. Elles constituent le système nerveux du projet, permettant des ajustements en temps réel et la détection immédiate de tout impact sur la faune désertique — notamment le <em>Shai-Hulud</em>.</p>
+            <div class="tech-rows">
+              <div class="tech-row"><span class="tech-row-lbl">Stations actives</span><span class="tech-row-val">70 / 90 prévues</span></div>
+              <div class="tech-row"><span class="tech-row-lbl">Points de données / jour</span><span class="tech-row-val">2,4 millions</span></div>
+              <div class="tech-row"><span class="tech-row-lbl">Couverture surface planète</span><span class="tech-row-val">68%</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tech-card" onclick="toggleTech(this)">
+          <div class="tech-card-head">
+            <div class="tech-ico">❄️</div>
+            <div class="tech-lbl">Réservoirs Polaires</div>
+            <span class="tech-toggle-icon">▼</span>
+          </div>
+          <div class="tech-body">
+            <p>Les calottes polaires d'Arrakis renferment d'immenses réserves de glace d'eau pure. Des systèmes de drainage guidé permettent une libération contrôlée vers les zones de plantation. Les calculs de Kynes indiquent 40 000 km² exploitables sans déstabiliser l'équilibre thermique planétaire.</p>
+            <div class="tech-rows">
+              <div class="tech-row"><span class="tech-row-lbl">Réserve estimée</span><span class="tech-row-val">40 000 km²</span></div>
+              <div class="tech-row"><span class="tech-row-lbl">Débit libéré / an</span><span class="tech-row-val">2 km³</span></div>
+              <div class="tech-row"><span class="tech-row-lbl">Impact thermique planétaire</span><span class="tech-row-val">&lt; 0,3°C / siècle</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tech-card" onclick="toggleTech(this)">
+          <div class="tech-card-head">
+            <div class="tech-ico">🌊</div>
+            <div class="tech-lbl">Qanats Souterrains</div>
+            <span class="tech-toggle-icon">▼</span>
+          </div>
+          <div class="tech-body">
+            <p>Inspirés de l'ingénierie perse antique de Terra, les qanats sont des tunnels légèrement inclinés acheminant l'eau des calottes vers les zones de culture sans pompage. Invisibles depuis la surface, protégés des tempêtes et de l'évaporation, ils prolongent et démultiplient l'efficacité de chaque litre collecté. Les Fremens en creusent depuis des générations.</p>
+            <div class="tech-rows">
+              <div class="tech-row"><span class="tech-row-lbl">Réseau actuel</span><span class="tech-row-val">8 000 km</span></div>
+              <div class="tech-row"><span class="tech-row-lbl">Pertes par évaporation</span><span class="tech-row-val">&lt; 2%</span></div>
+              <div class="tech-row"><span class="tech-row-lbl">Objectif réseau final</span><span class="tech-row-val">120 000 km</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════════ SECTION C ══════════════════════ -->
+<section id="section-c">
+  <div class="container">
+
+    <div class="reveal">
+      <div class="eyebrow">Section III — La Projection</div>
+      <h2 class="sec-title">L'Avenir Vert :<br>Arrakis dans 400 ans</h2>
+      <div class="sec-rule green"></div>
+      <p class="sec-intro">Voici l'Arrakis de nos descendants. Non pas une planète noyée, mais un monde en équilibre délicat : déserts productifs au Sud, savanes au nord, et l'Épice coulant toujours dans le sable éternel.</p>
+    </div>
+
+    <!-- Transition Slider -->
+    <div class="slider-intro reveal reveal-delay">
+      <h3>Simulation de la Transition Temporelle</h3>
+      <p>Faites glisser pour visualiser la progression de la terraformation au fil des siècles.</p>
+
+      <div class="trans-visual" id="transVisual">
+        <!-- Desert Layer -->
+        <div class="layer-d">
+          <svg viewBox="0 0 1000 360" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="dsky" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#3a1a05"/>
+                <stop offset="100%" stop-color="#6a3010"/>
+              </linearGradient>
+            </defs>
+            <rect width="1000" height="360" fill="url(#dsky)"/>
+            <!-- Sun -->
+            <circle cx="800" cy="65" r="50" fill="rgba(232,145,26,0.2)"/>
+            <circle cx="800" cy="65" r="32" fill="rgba(255,180,60,0.4)"/>
+            <circle cx="800" cy="65" r="18" fill="rgba(255,210,80,0.6)"/>
+            <!-- Heat haze lines -->
+            <g opacity="0.12">
+              <path d="M0,160 Q250,150 500,165 Q750,178 1000,158" stroke="#e8911a" stroke-width="1" fill="none"/>
+              <path d="M0,180 Q250,190 500,178 Q750,165 1000,185" stroke="#e8911a" stroke-width="0.6" fill="none"/>
+            </g>
+            <!-- Dunes -->
+            <path d="M0,220 C100,195 200,240 320,215 C440,190 560,230 680,205 C800,180 900,218 1000,200 L1000,360 L0,360Z" fill="#8a4a18"/>
+            <path d="M0,258 C130,240 260,272 420,252 C580,232 720,268 880,248 L1000,255 L1000,360 L0,360Z" fill="#6a3510"/>
+            <path d="M0,295 C200,278 400,305 620,285 C800,268 920,295 1000,285 L1000,360 L0,360Z" fill="#4a2208"/>
+            <path d="M0,325 C300,312 600,335 1000,318 L1000,360 L0,360Z" fill="#2a1205"/>
+            <!-- Sand particles -->
+            <g fill="rgba(212,170,100,0.4)">
+              <circle cx="120" cy="235" r="2"/><circle cx="340" cy="218" r="1.5"/><circle cx="560" cy="242" r="2"/>
+              <circle cx="780" cy="215" r="1.5"/><circle cx="200" cy="258" r="1"/><circle cx="650" cy="268" r="2"/>
+            </g>
+            <text x="500" y="130" text-anchor="middle" fill="rgba(232,145,26,0.18)" font-family="Cinzel,serif" font-size="24" letter-spacing="10">ARRAKIS · AN 0</text>
+          </svg>
+        </div>
+
+        <!-- Green Layer -->
+        <div class="layer-g" id="greenLayer">
+          <svg viewBox="0 0 1000 360" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="gsky" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#0a2a4a"/>
+                <stop offset="50%" stop-color="#1a4a3a"/>
+                <stop offset="100%" stop-color="#2a6a4a"/>
+              </linearGradient>
+            </defs>
+            <rect width="1000" height="360" fill="url(#gsky)"/>
+            <!-- Clouds -->
+            <ellipse cx="200" cy="80" rx="110" ry="28" fill="rgba(255,255,255,0.12)"/>
+            <ellipse cx="160" cy="72" rx="70" ry="22" fill="rgba(255,255,255,0.08)"/>
+            <ellipse cx="700" cy="60" rx="130" ry="25" fill="rgba(255,255,255,0.10)"/>
+            <ellipse cx="740" cy="52" rx="85" ry="18" fill="rgba(255,255,255,0.07)"/>
+            <!-- Sun (gentler) -->
+            <circle cx="820" cy="70" r="40" fill="rgba(255,220,100,0.15)"/>
+            <circle cx="820" cy="70" r="24" fill="rgba(255,220,100,0.25)"/>
+            <!-- Hills -->
+            <path d="M0,200 C100,168 200,198 320,175 C440,152 560,188 680,162 C800,138 900,172 1000,158 L1000,360 L0,360Z" fill="#1a5a30"/>
+            <path d="M0,245 C130,220 260,252 430,230 C600,208 730,248 900,228 L1000,235 L1000,360 L0,360Z" fill="#2a7a45"/>
+            <path d="M0,285 C200,268 400,295 640,272 C820,254 940,282 1000,272 L1000,360 L0,360Z" fill="#3a9a5a"/>
+            <path d="M0,320 C300,305 600,330 1000,312 L1000,360 L0,360Z" fill="#4ab870"/>
+            <!-- Trees -->
+            <g fill="#1a6a30">
+              <ellipse cx="80"  cy="210" rx="22" ry="32"/><ellipse cx="80"  cy="240" rx="12" ry="5"/>
+              <ellipse cx="200" cy="205" rx="18" ry="28"/><ellipse cx="200" cy="232" rx="10" ry="4"/>
+              <ellipse cx="420" cy="200" rx="24" ry="36"/><ellipse cx="420" cy="234" rx="13" ry="5"/>
+              <ellipse cx="600" cy="205" rx="16" ry="25"/><ellipse cx="600" cy="228" rx="9" ry="4"/>
+              <ellipse cx="820" cy="198" rx="22" ry="33"/><ellipse cx="820" cy="229" rx="12" ry="5"/>
+              <ellipse cx="960" cy="208" rx="18" ry="28"/>
+            </g>
+            <!-- River -->
+            <path d="M350,360 C360,330 380,305 410,280 C445,252 475,240 510,228" stroke="rgba(80,140,200,0.5)" stroke-width="9" fill="none" stroke-linecap="round"/>
+            <path d="M350,360 C360,330 380,305 410,280 C445,252 475,240 510,228" stroke="rgba(120,180,240,0.25)" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <text x="500" y="130" text-anchor="middle" fill="rgba(74,158,110,0.3)" font-family="Cinzel,serif" font-size="24" letter-spacing="10">ARRAKIS · AN 400</text>
+          </svg>
+        </div>
+
+        <div class="slider-blade" id="sliderBlade"></div>
+        <div class="trans-label tl-d">Désert · An 0</div>
+        <div class="trans-label tl-g">Terraformée · An 400</div>
+        <div class="year-badge" id="yearBadge">An 0</div>
+      </div>
+
+      <input type="range" id="transRange" min="0" max="100" value="0">
+      <div class="range-labels">
+        <span>An 0<br>État actuel</span>
+        <span>An 100<br>Premiers verts</span>
+        <span>An 200<br>Nuages naturels</span>
+        <span>An 300<br>Premières rivières</span>
+        <span>An 400<br>Arrakis vivable</span>
+      </div>
+    </div>
+
+    <!-- SPICE ARGUMENT -->
+    <div class="spice-block reveal">
+      <h3>⚗️ L'Épice : Garantie de Pérennité</h3>
+      <div class="sub">Réponse formelle à la préoccupation fondamentale de l'Imperium</div>
+
+      <p class="spice-lead">Votre Majesté Impériale, nous anticipons la question qui décidera de tout : <em>la terraformation détruira-t-elle les vers de sable et, avec eux, la production d'Épice ?</em> La réponse des données de Pardot Kynes est absolue : <strong>non. Le projet est conçu pour que le cycle de l'Épice non seulement survive, mais prospère.</strong></p>
+
+      <div class="args-grid">
+        <div class="arg-card">
+          <h4>🐛 L'écologie du Ver de Sable</h4>
+          <p>Les <em>Shai-Hulud</em> vivent dans les zones de sable profond à <strong>plus de 100 mètres</strong> sous la surface. Leur cycle biologique — sable de feu → plancton du sable → masse de pré-Épice → Épice — est entièrement confiné aux ergs équatoriaux. L'humidité de surface ne pénètre pas à ces profondeurs sur l'échelle du projet.</p>
+        </div>
+        <div class="arg-card">
+          <h4>🗺️ Un Zonage Chirurgical</h4>
+          <p>Le plan Kynes cible <strong>exclusivement les zones polaires et les franges tempérées</strong> — 35% de la surface planétaire. Les <strong>65% de désert équatorial</strong>, habitat primaire et irremplaçable des vers, sont contractuellement exclus du périmètre de terraformation pour les quatre premiers siècles.</p>
+        </div>
+        <div class="arg-card">
+          <h4>📈 Le Paradoxe de l'Abondance</h4>
+          <p>La terraformation fait passer la population vivable d'Arrakis de <strong>~50 000 à 500 millions d'habitants</strong>. Plus de population = plus de récolteurs disponibles pour opérer dans les zones désertiques préservées. <strong>La capacité de récolte d'Épice est promise à être multipliée par 10 d'ici l'An 400.</strong></p>
+        </div>
+        <div class="arg-card">
+          <h4>⏱️ Un Plan Réversible par Phases</h4>
+          <p>La terraformation avance <strong>centimètre par centimètre</strong>, siècle par siècle. Chaque phase est validée par les 70 stations de monitoring avant d'engager la suivante. Tout impact détecté sur les populations de vers déclenche un protocole d'arrêt immédiat. <strong>Aucun risque de dégât irréversible n'est acceptable — et aucun n'est prévu.</strong></p>
+        </div>
+      </div>
+
+      <!-- Zone map -->
+      <div class="zone-lbl">Carte des Zones — Terraformation vs. Habitat Ver de Sable</div>
+      <svg viewBox="0 0 820 260" xmlns="http://www.w3.org/2000/svg" class="zone-map-svg">
+        <defs>
+          <pattern id="sp" patternUnits="userSpaceOnUse" width="8" height="8">
+            <rect width="8" height="8" fill="#211005"/>
+            <circle cx="4" cy="4" r="1" fill="rgba(232,145,26,0.18)"/>
+          </pattern>
+          <pattern id="gp" patternUnits="userSpaceOnUse" width="8" height="8">
+            <rect width="8" height="8" fill="#0d2218"/>
+            <circle cx="4" cy="4" r="1" fill="rgba(74,158,110,0.25)"/>
+          </pattern>
+        </defs>
+        <!-- Planet -->
+        <ellipse cx="410" cy="130" rx="380" ry="112" fill="url(#sp)" stroke="rgba(232,145,26,0.15)" stroke-width="1"/>
+        <!-- North green -->
+        <ellipse cx="410" cy="35" rx="210" ry="52" fill="url(#gp)"/>
+        <ellipse cx="410" cy="35" rx="210" ry="52" fill="none" stroke="rgba(74,158,110,0.55)" stroke-width="1.5" stroke-dasharray="6,3"/>
+        <!-- South green -->
+        <ellipse cx="410" cy="225" rx="185" ry="46" fill="url(#gp)"/>
+        <ellipse cx="410" cy="225" rx="185" ry="46" fill="none" stroke="rgba(74,158,110,0.55)" stroke-width="1.5" stroke-dasharray="6,3"/>
+        <!-- Equatorial worm zone -->
+        <ellipse cx="410" cy="130" rx="350" ry="62" fill="rgba(232,145,26,0.04)"/>
+        <ellipse cx="410" cy="130" rx="350" ry="62" fill="none" stroke="rgba(232,145,26,0.28)" stroke-width="1"/>
+        <!-- Worm symbols -->
+        <text x="130" y="136" text-anchor="middle" fill="rgba(232,145,26,0.25)" font-size="22" font-family="serif">〜〜</text>
+        <text x="690" y="136" text-anchor="middle" fill="rgba(232,145,26,0.25)" font-size="22" font-family="serif">〜〜</text>
+        <!-- Labels -->
+        <text x="410" y="31"  text-anchor="middle" fill="rgba(74,158,110,0.9)"  font-family="Rajdhani,sans-serif" font-size="10" font-weight="700" letter-spacing="2">ZONE NORD — TERRAFORMATION (18% surface)</text>
+        <text x="410" y="128" text-anchor="middle" fill="rgba(232,145,26,0.9)"  font-family="Rajdhani,sans-serif" font-size="10" font-weight="700" letter-spacing="2">GRAND ERG ÉQUATORIAL — INTOUCHÉ (65% surface)</text>
+        <text x="410" y="142" text-anchor="middle" fill="rgba(232,145,26,0.55)" font-family="Rajdhani,sans-serif" font-size="8"  letter-spacing="1">HABITAT PRIMAIRE DES VERS DE SABLE — HORS PÉRIMÈTRE</text>
+        <text x="410" y="222" text-anchor="middle" fill="rgba(74,158,110,0.9)"  font-family="Rajdhani,sans-serif" font-size="10" font-weight="700" letter-spacing="2">ZONE SUD — TERRAFORMATION (17% surface)</text>
+        <!-- Legend -->
+        <rect x="22"  y="190" width="10" height="10" fill="rgba(74,158,110,0.5)"  stroke="rgba(74,158,110,0.9)"  stroke-width="1"/>
+        <text x="38"  y="199" fill="rgba(74,158,110,0.85)"  font-family="Rajdhani,sans-serif" font-size="9">Zone terraformée (35%)</text>
+        <rect x="22"  y="208" width="10" height="10" fill="rgba(232,145,26,0.12)" stroke="rgba(232,145,26,0.6)" stroke-width="1"/>
+        <text x="38"  y="217" fill="rgba(232,145,26,0.8)"  font-family="Rajdhani,sans-serif" font-size="9">Habitat des Shai-Hulud — zone préservée (65%)</text>
+      </svg>
+
+      <!-- Bar chart -->
+      <div class="chart-lbl">Projection de la Production d'Épice sur 400 ans</div>
+      <div class="chart-sub">Corrélation entre terraformation, démographie et capacité de récolte</div>
+      <div class="bar-chart">
+        <div class="bar-group">
+          <div class="bar-cluster">
+            <div class="bar-item s" style="height:58px" title="Épice sauvage"></div>
+            <div class="bar-item p" style="height:9px"  title="Population active"></div>
+            <div class="bar-item r" style="height:18px" title="Récolte totale"></div>
+          </div>
+          <span class="bar-year">An 0</span>
+        </div>
+        <div class="bar-group">
+          <div class="bar-cluster">
+            <div class="bar-item s" style="height:54px"></div>
+            <div class="bar-item p" style="height:28px"></div>
+            <div class="bar-item r" style="height:40px"></div>
+          </div>
+          <span class="bar-year">An 100</span>
+        </div>
+        <div class="bar-group">
+          <div class="bar-cluster">
+            <div class="bar-item s" style="height:50px"></div>
+            <div class="bar-item p" style="height:60px"></div>
+            <div class="bar-item r" style="height:75px"></div>
+          </div>
+          <span class="bar-year">An 200</span>
+        </div>
+        <div class="bar-group">
+          <div class="bar-cluster">
+            <div class="bar-item s" style="height:47px"></div>
+            <div class="bar-item p" style="height:95px"></div>
+            <div class="bar-item r" style="height:112px"></div>
+          </div>
+          <span class="bar-year">An 300</span>
+        </div>
+        <div class="bar-group">
+          <div class="bar-cluster">
+            <div class="bar-item s" style="height:44px"></div>
+            <div class="bar-item p" style="height:140px"></div>
+            <div class="bar-item r" style="height:145px"></div>
+          </div>
+          <span class="bar-year">An 400</span>
+        </div>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--spice)"></div>Épice sauvage produite</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--fremen)"></div>Population de récolteurs</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Récolte totale d'Épice</div>
+      </div>
+
+      <div class="conclusion">
+        <h4>✦ Conclusion à l'Attention de l'Imperium</h4>
+        <p>Le projet de terraformation d'Arrakis est <strong>structurellement compatible avec la pérennité de la production d'Épice</strong>. Les <em>Shai-Hulud</em> vivent dans les ergs profonds des zones équatoriales — zones intouchées par notre plan pour les quatre premiers siècles. L'humidité de surface ne pénètre pas à 100 mètres de profondeur à l'échelle de temps concernée. Les vers ne courent aucun risque immédiat. Au contraire : une Arrakis partiellement vivable attirera <strong>dix fois plus de population</strong>, décuplant notre capacité de récolte dans les zones désertiques préservées. <strong>La production d'Épice n'est pas menacée — elle est destinée à doubler. L'Épice coulera toujours. Arrakis verdira aussi.</strong></p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════════ FOOTER ══════════════════════ -->
+<footer>
+  <div class="footer-logo">ARRAKIS</div>
+  <p class="footer-quote">"Le mystère de Dune n'est pas de savoir comment y survivre, mais comment en changer la nature."</p>
+  <div class="footer-meta">Projet de Terraformation · Coordination Liet Kynes · Présenté à l'Empereur Padishah Shadam IV · Kaitain, 10191 A.G.</div>
+</footer>
+
+<script>
+/* ── PARTICLES ── */
+const pc = document.getElementById('particles');
+for (let i = 0; i < 45; i++) {
+  const el = document.createElement('div');
+  el.className = 'p';
+  const sz  = Math.random() * 2.8 + 0.8;
+  const dx  = (Math.random() - 0.3) * 300;
+  const dy  = -(Math.random() * 180 + 40);
+  el.style.cssText = `
+    width:${sz}px; height:${sz}px;
+    left:${Math.random()*100}%;
+    top:${Math.random()*100}%;
+    --dx:${dx}px; --dy:${dy}px;
+    animation-duration:${Math.random()*12+9}s;
+    animation-delay:${Math.random()*6}s;
+    opacity:0;
+  `;
+  pc.appendChild(el);
+}
+
+/* ── NAVBAR ── */
+window.addEventListener('scroll', () => {
+  document.getElementById('nav').classList.toggle('solid', scrollY > 40);
+}, { passive: true });
+
+/* ── REVEAL ON SCROLL ── */
+const revealObs = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('vis'); });
+}, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+document.querySelectorAll('.reveal').forEach(el => revealObs.observe(el));
+
+/* ── TECH CARDS TOGGLE ── */
+function toggleTech(card) {
+  const body   = card.querySelector('.tech-body');
+  const isOpen = card.classList.contains('open');
+  document.querySelectorAll('.tech-card').forEach(c => {
+    c.classList.remove('open');
+    c.querySelector('.tech-body').style.display = 'none';
+  });
+  if (!isOpen) {
+    card.classList.add('open');
+    body.style.display = 'block';
+  }
+}
+
+/* ── TRANSITION SLIDER ── */
+const rangeEl     = document.getElementById('transRange');
+const greenLayer  = document.getElementById('greenLayer');
+const sliderBlade = document.getElementById('sliderBlade');
+const yearBadge   = document.getElementById('yearBadge');
+const transVisual = document.getElementById('transVisual');
+
+function applySlider(pct) {
+  pct = Math.max(0, Math.min(100, pct));
+  greenLayer.style.clipPath  = `inset(0 ${100 - pct}% 0 0)`;
+  sliderBlade.style.left     = `calc(${pct}% - 1px)`;
+  yearBadge.textContent      = `An ${Math.round(pct * 4)}`;
+  rangeEl.value              = pct;
+}
+
+rangeEl.addEventListener('input', e => applySlider(+e.target.value));
+
+let dragging = false;
+const getPct = (clientX) => {
+  const r = transVisual.getBoundingClientRect();
+  return ((clientX - r.left) / r.width) * 100;
+};
+transVisual.addEventListener('mousedown',  e => { dragging = true; applySlider(getPct(e.clientX)); });
+transVisual.addEventListener('touchstart', e => { dragging = true; applySlider(getPct(e.touches[0].clientX)); }, { passive: true });
+window.addEventListener('mousemove',  e => { if (dragging) applySlider(getPct(e.clientX)); });
+window.addEventListener('touchmove',  e => { if (dragging) applySlider(getPct(e.touches[0].clientX)); }, { passive: true });
+window.addEventListener('mouseup',   () => dragging = false);
+window.addEventListener('touchend',  () => dragging = false);
+applySlider(0);
+
+/* ── API DATA ── */
+const BASE   = 'https://iutdijon.u-bourgogne.fr/intra/iq/webservices/arrakis/';
+const LIEUX  = ['habbanya', 'makab', 'nord'];
+
+async function fetchVal(endpoint, lieu) {
+  try {
+    const res = await fetch(`${BASE}${endpoint}?lieu=${lieu}`);
+    if (!res.ok) throw 0;
+    return (await res.text()).trim();
+  } catch { return null; }
+}
+
+const fmt = (v, unit, dec=1) => {
+  if (!v) return '—';
+  const n = parseFloat(v);
+  return isNaN(n) ? v : `${n.toFixed(dec)}${unit}`;
+};
+
+async function refresh() {
+  for (const lieu of LIEUX) {
+    const [temp, vent, hygro] = await Promise.all([
+      fetchVal('temp.php',  lieu),
+      fetchVal('vent.php',  lieu),
+      fetchVal('hygro.php', lieu)
+    ]);
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set(`tv-${lieu}`, fmt(temp,  '°C', 1));
+    set(`wv-${lieu}`, fmt(vent,  ' km/h', 0));
+    set(`hv-${lieu}`, fmt(hygro, '%', 1));
+
+    // refresh webcam with cache buster
+    const cam = document.getElementById(`cam-${lieu}`);
+    if (cam) cam.src = `${BASE}webcam.php?lieu=${lieu}&_=${Date.now()}`;
+  }
+  const now = new Date();
+  const note = document.getElementById('refresh-note');
+  if (note) note.textContent = `Dernière mise à jour : ${now.toLocaleTimeString('fr-FR')} — Actualisation automatique toutes les 60 s`;
+}
+
+refresh();
+setInterval(refresh, 60000);
+</script>
+</body>
+</html>
