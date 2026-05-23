@@ -241,15 +241,11 @@ def find_best_locations(maps, top_n=10):
     cols_max = 18
     
     tous_les_emplacements = []
-
-    # 1. On parcourt toute la carte
     for y in range(lignes_max):
         for x in range(cols_max):
             
-            # On ne peut placer une récolteuse QUE sur une case vide
             if carte_obj[y][x] == 'X':
                 
-                # Les 7 cases à évaluer (la case + les 6 voisines hexagonales)
                 zone_recolte = [
                     (x, y),       (x+1, y),     (x-1, y),
                     (x, y+1),     (x, y-1),     (x-1, y+1),   (x-1, y-1)
@@ -257,12 +253,10 @@ def find_best_locations(maps, top_n=10):
                 
                 rendement_total = 0
                 
-                # On additionne la densité de toutes les cases valides de la zone
                 for vx, vy in zone_recolte:
                     if 0 <= vx < cols_max and 0 <= vy < lignes_max:
                         rendement_total += int(carte_dns[vy][vx])
                 
-                # Détermination du secteur selon les règles du manuel
                 if y < 8 and x < 9:
                     secteur = 0
                 elif y < 8 and x >= 9:
@@ -312,3 +306,95 @@ def find_best_locations(maps, top_n=10):
         "top_spots": top_emplacements,
         "classement_secteurs": classement_secteurs
     }
+
+def classify_threats_scores(reponse_scores, mon_id):
+    """
+    Analyse la chaîne renvoyée par la demande SCORES pour identifier
+    quel adversaire est actuellement en tête.
+    """
+
+    scores_bruts = reponse_scores.split('|')
+    classement_ennemis = []
+
+    for joueur_id, score_str in enumerate(scores_bruts):
+        if score_str.strip() == "":
+            continue
+
+        score = int(score_str)
+        
+        if str(joueur_id) != str(mon_id):
+            classement_ennemis.append({
+                "id_joueur": str(joueur_id),
+                "score": score
+            })
+
+    classement_ennemis.sort(key=lambda x: x["score"], reverse=True)
+
+    return classement_ennemis
+
+def strategic_sabotage_advance(maps, mon_id, classement_ennemis):
+    """
+    Trouve le meilleur secteur à saboter en ciblant le leader, tout en 
+    autorisant le tir allié (sacrifice) SEULEMENT si c'est mathématiquement rentable.
+    """
+    carte_obj = maps['obj']
+    
+    joueur_en_tete = classement_ennemis[0]["id_joueur"]
+
+    stats_secteurs = {i: {'ennemis_total': 0, 'allies': 0, 'ennemis_leader': 0} for i in range(4)}
+    total_allies = 0
+
+    for y in range(16):
+        for x in range(18):
+            element = carte_obj[y][x]
+
+            if element.isdigit():
+                if y < 8 and x < 9: sec = 0
+                elif y < 8 and x >= 9: sec = 1
+                elif y >= 8 and x < 9: sec = 2
+                else: sec = 3
+
+                if element == str(mon_id):
+                    stats_secteurs[sec]['allies'] += 1
+                    total_allies += 1  
+                else:
+                    stats_secteurs[sec]['ennemis_total'] += 1
+                    if element == joueur_en_tete:
+                        stats_secteurs[sec]['ennemis_leader'] += 1
+
+
+    cibles = []
+    for sec, stats in stats_secteurs.items():
+        ennemis = stats['ennemis_total']
+        allies = stats['allies']
+        leader = stats['ennemis_leader']
+
+        if ennemis == 0:
+            continue
+
+        if allies > 0 and allies == total_allies:
+            continue
+
+        ennemis_lambdas = ennemis - leader
+        gains = (ennemis_lambdas * 1) + (leader * 3)
+
+        if allies > 0:
+            malus_par_allie = 10 / total_allies 
+            pertes = allies * malus_par_allie
+        else:
+            pertes = 0
+
+        score_cible = gains - pertes
+
+        if score_cible > 0:
+            cibles.append({
+                "secteur": sec,
+                "score_cible": score_cible,
+                "machines_detruites": ennemis,
+                "dont_leader": leader,
+                "sacrifices": allies
+            })
+
+    cibles.sort(key=lambda item: item['score_cible'], reverse=True)
+    
+    return cibles
