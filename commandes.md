@@ -4,11 +4,11 @@
 
 | Commande                                     | Arguments   | Effet                                     |
 | -------------------------------------------- | ----------- | ----------------------------------------- |
-| `AJOUTERRECOLTEUSE\|ligne\|colonne`          | 0-15 / 0-17 | Place une récolteuse (coûte 5000)         |
+| `AJOUTERRECOLTEUSE\|ligne\|colonne`          | 0-15 / 0-17 | Place une récolteuse (coûte 3000)         |
 | `AJOUTERUSINE\|ligne\|colonne`               | 0-15 / 0-17 | Place une usine (coûte 5000)              |
 | `DEPLACER\|ligne\|col\|ligne_dest\|col_dest` | 0-15 / 0-17 | Déplace une récolteuse (gratuit)          |
-| `AJOUTERORNI\|secteur`                       | 0-3         | Déploie un ornithoptère pour 5 tours      |
-| `SABOTER\|secteur`                           | 0-3         | Attire un ver sur le secteur (coûte 5000) |
+| `AJOUTERORNI\|secteur`                       | 0-3         | Déploie un ornithoptère pour 5 tours et coute 400  |
+| `SABOTER\|secteur`                           | 0-3         | Attire un ver sur le secteur (coûte 600) |
 | `FINDETOUR`                                  | aucun       | Termine votre tour                        |
 
 ---
