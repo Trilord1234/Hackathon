@@ -6,39 +6,27 @@ LARGEUR = 18
 MAX_ACTIONS = 15
 
 def get_secteur(l, c):
-    if l <= 7:
-        return 0 if c <= 8 else 1
-    else:
-        return 2 if c <= 8 else 3
+    return (0 if c <= 8 else 1) if l <= 7 else (2 if c <= 8 else 3)
 
-def distance_rapide(l1, c1, l2, c2):
-    return max(abs(l1 - l2), abs(c1 - c2))
+def dist(l1, c1, l2, c2):
+    return max(abs(l1-l2), abs(c1-c2))
 
 class SpiceBotUltime:
     def __init__(self, equipe="LesVersPythons"):
         self.equipe = equipe
-        self.host = "127.0.0.1"
-        self.port = 1234
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.mon_id = -1
         self.actions_restantes = MAX_ACTIONS
         self._buffer = ""
-
         self.plateau = {}
         for l in range(HAUTEUR):
             for c in range(LARGEUR):
-                self.plateau[(l, c)] = {
-                    'densite': 0,
-                    'element': 'X',
-                    'secteur': get_secteur(l, c)
-                }
+                self.plateau[(l,c)] = {'densite':0,'element':'X','secteur':get_secteur(l,c)}
 
-    # ─────────────────────────────────────────────
-    # COUCHE RÉSEAU
-    # ─────────────────────────────────────────────
+    # ── RÉSEAU ────────────────────────────────────
 
     def _readline(self):
-        """Lit UNE ligne complète depuis le socket via buffer interne."""
+        """Lecture bloquante d'une ligne complète (boucle principale)."""
         while '\n' not in self._buffer:
             data = self.sock.recv(4096).decode('utf-8')
             if not data:
@@ -47,171 +35,154 @@ class SpiceBotUltime:
         line, self._buffer = self._buffer.split('\n', 1)
         return line.strip()
 
-    def envoyer(self, cmd):
-        """Envoie une commande ET lit la réponse (OK/NOK ou données).
-        À utiliser pour TOUT : queries ET actions.
-        Le serveur répond toujours OK ou NOK selon le manuel."""
+    def envoyer_query(self, cmd):
+        """Queries seulement (DENSITE, ELEMENTS, WARNING) — réponse garantie."""
         self.sock.sendall((cmd + "\n").encode('utf-8'))
-        rep = self._readline()
-        return rep
+        self.actions_restantes -= 1
+        return self._readline()
 
     def envoyer_action(self, cmd):
-        """Wrapper qui appelle envoyer() et décrémente le compteur d'actions."""
-        if self.actions_restantes > 0:
-            rep = self.envoyer(cmd)
-            self.actions_restantes -= 1
+        """Actions de jeu — tente de lire OK/NOK avec timeout court.
+        Si le serveur ne répond pas dans 0.4s → on continue sans bloquer."""
+        if self.actions_restantes <= 0:
+            return None
+        self.sock.sendall((cmd + "\n").encode('utf-8'))
+        self.actions_restantes -= 1
+        self.sock.settimeout(0.4)
+        try:
+            rep = self._readline()
             return rep
-        return None
+        except (socket.timeout, OSError):
+            self._buffer = ""  # vider résidus éventuels
+            return None
+        finally:
+            self.sock.settimeout(None)  # toujours remettre en bloquant
 
-    # ─────────────────────────────────────────────
-    # CONNEXION & BOUCLE PRINCIPALE
-    # ─────────────────────────────────────────────
+    # ── CONNEXION ─────────────────────────────────
 
     def connecter(self):
-        print(f"[*] Connexion au serveur {self.host}:{self.port}...")
-        self.sock.connect((self.host, self.port))
-
+        print(f"[*] Connexion à 127.0.0.1:1234...")
+        self.sock.connect(("127.0.0.1", 1234))
         msg = self._readline()
         if msg == "NOM_EQUIPE":
             self.sock.sendall((self.equipe + "\n").encode('utf-8'))
-            reponse = self._readline()
-            print(f"[*] Réponse serveur : {reponse}")
-            if "|" in reponse:
+            rep = self._readline()
+            print(f"[*] Serveur : {rep}")
+            if "|" in rep:
                 try:
-                    self.mon_id = int(reponse.split('|')[1].strip())
-                    print(f"[+] Mon ID de joueur : {self.mon_id}")
+                    self.mon_id = int(rep.split('|')[1].strip())
+                    print(f"[+] ID joueur : {self.mon_id}")
                 except ValueError:
-                    print("[!] Impossible de parser l'ID — brut :", reponse)
-
+                    print("[!] Parse ID échoué, brut :", rep)
         self.boucle_jeu()
 
-    def actualiser_plateau(self):
-        rep_densite = self.envoyer("DENSITE")
-        rep_elements = self.envoyer("ELEMENTS")
-        self.actions_restantes -= 2  # comptabilise les 2 queries
-
-        if len(rep_densite) >= HAUTEUR * LARGEUR and len(rep_elements) >= HAUTEUR * LARGEUR:
-            for i in range(HAUTEUR * LARGEUR):
-                l, c = divmod(i, LARGEUR)
-                self.plateau[(l, c)]['densite'] = int(rep_densite[i])
-                self.plateau[(l, c)]['element'] = rep_elements[i]
-
-    def obtenir_cases_par_element(self, element_type):
-        return [
-            (l, c)
-            for (l, c), data in self.plateau.items()
-            if data['element'] == str(element_type)
-        ]
+    # ── BOUCLE PRINCIPALE ─────────────────────────
 
     def boucle_jeu(self):
-        print("[*] En attente du début de la partie (appuyez sur ENTRÉE dans le jeu)...")
+        print("[*] En attente de DEBUT_TOUR...")
         while True:
             msg = self._readline()
             if not msg:
                 continue
-
             if not msg.startswith("DEBUT_TOUR"):
-                print(f"[~] Message ignoré : {msg}")
+                print(f"[~] Ignoré : {msg!r}")
                 continue
 
-            parts = msg.split('|')
-            tour = parts[1] if len(parts) > 1 else "?"
-            print(f"\n{'='*10} TOUR {tour} {'='*10}")
+            tour = msg.split('|')[1] if '|' in msg else "?"
+            print(f"\n{'='*12} TOUR {tour} {'='*12}")
             self.actions_restantes = MAX_ACTIONS
 
-            self.actualiser_plateau()
-            alertes_vers = self.envoyer("WARNING").split('|')
-            self.actions_restantes -= 1  # comptabilise WARNING
-            print(f"[*] Alertes Vers : {alertes_vers}")
-            # Il reste MAX_ACTIONS - 3 = 12 actions réelles
+            # 3 queries = 3 actions consommées
+            densite  = self.envoyer_query("DENSITE")
+            elements = self.envoyer_query("ELEMENTS")
+            alertes  = self.envoyer_query("WARNING").split('|')
+            print(f"[*] WARNING : {alertes}  — actions restantes : {self.actions_restantes}")
 
-            self.jouer_tour(alertes_vers)
+            for i in range(HAUTEUR * LARGEUR):
+                l, c = divmod(i, LARGEUR)
+                self.plateau[(l,c)]['densite'] = int(densite[i])
+                self.plateau[(l,c)]['element'] = elements[i]
 
-            print(f"[*] Fin du tour. Actions restantes : {self.actions_restantes}")
-            self.sock.sendall(("FINDETOUR\n").encode("utf-8"))
+            self.jouer_tour(alertes)
 
-    # ─────────────────────────────────────────────
-    # CERVEAU : STRATÉGIE IMITATEUR
-    # ─────────────────────────────────────────────
+            print(f"[*] Fin tour. Actions restantes : {self.actions_restantes}")
+            # FINDETOUR : pas de réponse — sendall direct
+            self.sock.sendall(("FINDETOUR\n").encode('utf-8'))
+            print("[*] FINDETOUR envoyé → attente DEBUT_TOUR suivant\n")
 
-    def jouer_tour(self, alertes_vers):
-        mes_recolteuses = self.obtenir_cases_par_element(self.mon_id)
+    # ── STRATÉGIE ─────────────────────────────────
+
+    def cases_de(self, element):
+        return [(l,c) for (l,c),d in self.plateau.items() if d['element']==str(element)]
+
+    def jouer_tour(self, alertes):
+        mes = self.cases_de(self.mon_id)
         ennemis = []
         for i in range(4):
             if i != self.mon_id:
-                ennemis.extend(self.obtenir_cases_par_element(i))
+                ennemis.extend(self.cases_de(i))
 
-        # ── PRIORITÉ 1 : SURVIE ──────────────────
-        for l, c in mes_recolteuses:
-            if self.actions_restantes <= 0:
-                break
-            secteur = get_secteur(l, c)
-            if alertes_vers[secteur] == "DANGER":
-                print(f"  [!] DANGER S{secteur} ! Évacuation ({l},{c})")
-                for (nl, nc), data in self.plateau.items():
-                    if data['element'] == 'X' and alertes_vers[data['secteur']] != "DANGER":
+        # PRIORITÉ 1 : Survie — fuir les vers
+        for l,c in mes:
+            if self.actions_restantes <= 0: break
+            if alertes[get_secteur(l,c)] == "DANGER":
+                print(f"  [!] DANGER ({l},{c}) — évacuation")
+                for (nl,nc),d in self.plateau.items():
+                    if d['element']=='X' and alertes[d['secteur']]!="DANGER":
                         self.envoyer_action(f"DEPLACER|{l}|{c}|{nl}|{nc}")
                         break
 
-        # ── PRIORITÉ 2 : RADARS (ORNI) ───────────
-        secteurs_occupes = {get_secteur(l, c) for l, c in mes_recolteuses}
-        for s in secteurs_occupes:
-            if self.actions_restantes <= 0:
-                break
-            if alertes_vers[s] == "INCONNU":
-                print(f"  [Radar] Orni secteur {s}")
+        # PRIORITÉ 2 : Radar — orni sur secteurs occupés inconnus
+        for s in {get_secteur(l,c) for l,c in mes}:
+            if self.actions_restantes <= 0: break
+            if alertes[s] == "INCONNU":
+                print(f"  [Radar] AJOUTERORNI secteur {s}")
                 self.envoyer_action(f"AJOUTERORNI|{s}")
 
-        # ── PRIORITÉ 3 : RIPOSTE (Tit-for-Tat) ──
-        for l, c in mes_recolteuses:
-            if self.actions_restantes <= 0:
-                break
-            for el, ec in ennemis:
-                if distance_rapide(l, c, el, ec) <= 2:
-                    print(f"  [Riposte] Ennemi en ({el},{ec}) — blocage !")
-                    meilleure_riposte, max_d = None, -1
-                    for dl, dc in [(-1,0),(1,0),(0,-1),(0,1),(-1,-1),(1,1)]:
-                        rl, rc = el + dl, ec + dc
-                        if (rl, rc) in self.plateau and self.plateau[(rl, rc)]['element'] == 'X':
-                            if self.plateau[(rl, rc)]['densite'] > max_d:
-                                max_d = self.plateau[(rl, rc)]['densite']
-                                meilleure_riposte = (rl, rc)
-                    if meilleure_riposte:
-                        self.envoyer_action(
-                            f"DEPLACER|{l}|{c}|{meilleure_riposte[0]}|{meilleure_riposte[1]}"
-                        )
+        # PRIORITÉ 3 : Riposte — bloquer les ennemis proches
+        for l,c in mes:
+            if self.actions_restantes <= 0: break
+            for el,ec in ennemis:
+                if dist(l,c,el,ec) <= 2:
+                    print(f"  [Riposte] Ennemi ({el},{ec})")
+                    best, best_d = None, -1
+                    for dl,dc in [(-1,0),(1,0),(0,-1),(0,1),(-1,-1),(1,1)]:
+                        rl,rc = el+dl, ec+dc
+                        if (rl,rc) in self.plateau and self.plateau[(rl,rc)]['element']=='X':
+                            if self.plateau[(rl,rc)]['densite'] > best_d:
+                                best_d = self.plateau[(rl,rc)]['densite']
+                                best = (rl,rc)
+                    if best:
+                        self.envoyer_action(f"DEPLACER|{l}|{c}|{best[0]}|{best[1]}")
 
-        # ── PRIORITÉ 4 : EXPANSION (Farming) ─────
-        cases_libres = [
-            (l, c)
-            for (l, c), data in self.plateau.items()
-            if data['element'] == 'X' and alertes_vers[data['secteur']] != "DANGER"
-        ]
-        cases_libres.sort(key=lambda coord: self.plateau[coord]['densite'], reverse=True)
-
-        for l, c in cases_libres:
-            if self.actions_restantes <= 0:
-                break
-            if not any(distance_rapide(l, c, el, ec) <= 2 for el, ec in ennemis):
-                print(f"  [Farming] Récolteuse ({l},{c}) densité={self.plateau[(l,c)]['densite']}")
+        # PRIORITÉ 4 : Expansion — placer récolteuses sur cases denses sûres
+        cases_libres = sorted(
+            [(l,c) for (l,c),d in self.plateau.items()
+             if d['element']=='X' and alertes[d['secteur']]!="DANGER"],
+            key=lambda xy: self.plateau[xy]['densite'], reverse=True
+        )
+        for l,c in cases_libres:
+            if self.actions_restantes <= 0: break
+            if not any(dist(l,c,el,ec)<=2 for el,ec in ennemis):
+                print(f"  [Farm] ({l},{c}) densité={self.plateau[(l,c)]['densite']}")
                 rep = self.envoyer_action(f"AJOUTERRECOLTEUSE|{l}|{c}")
                 if rep == "NOK":
-                    # Plus d'argent — arrêter les achats
-                    print("  [!] NOK reçu — plus d'argent, stop farming")
+                    print("  [!] NOK — plus d'argent")
                     break
 
 
 if __name__ == "__main__":
-    nom_equipe = sys.argv[1] if len(sys.argv) > 1 else "Bot_Ultime"
-    bot = SpiceBotUltime(equipe=nom_equipe)
+    nom = sys.argv[1] if len(sys.argv) > 1 else "Bot_Ultime"
+    bot = SpiceBotUltime(equipe=nom)
     try:
         bot.connecter()
     except ConnectionResetError:
-        print("\n[!] Serveur déconnecté (fin de partie ou kick).")
+        print("\n[!] Serveur déconnecté (fin de partie).")
     except ConnectionError as e:
         print(f"\n[!] Connexion perdue : {e}")
     except KeyboardInterrupt:
-        print("\n[!] Arrêt du bot.")
+        print("\n[!] Arrêt.")
     except Exception as e:
-        print(f"[X] Erreur critique : {e}")
-        import traceback; traceback.print_exc()
+        import traceback
+        print(f"[X] Erreur : {e}")
+        traceback.print_exc()

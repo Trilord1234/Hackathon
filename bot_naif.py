@@ -22,10 +22,23 @@ class BotNaif:
         line, self._buffer = self._buffer.split('\n', 1)
         return line.strip()
 
-    def envoyer(self, cmd):
-        """Envoie une commande et lit la réponse (OK/NOK ou données)."""
+    def envoyer_query(self, cmd):
+        """Pour DENSITE, ELEMENTS, WARNING, SCORES — réponse garantie."""
         self.sock.sendall((cmd + "\n").encode('utf-8'))
         return self._readline()
+
+    def envoyer_action(self, cmd):
+        """Pour les actions — tente de lire OK/NOK avec timeout court."""
+        self.sock.sendall((cmd + "\n").encode('utf-8'))
+        self.sock.settimeout(0.4)
+        try:
+            rep = self._readline()
+            return rep
+        except (socket.timeout, OSError):
+            self._buffer = ""  # vider le buffer si timeout
+            return None
+        finally:
+            self.sock.settimeout(None)
 
     def connecter(self):
         self.sock.connect(("127.0.0.1", 1234))
@@ -51,9 +64,8 @@ class BotNaif:
             tour = msg.split('|')[1] if '|' in msg else "?"
             print(f"[Naif] === Tour {tour} ===")
 
-            # 2 queries utilisées sur les 15
-            rep_densite = self.envoyer("DENSITE")
-            rep_elements = self.envoyer("ELEMENTS")
+            rep_densite = self.envoyer_query("DENSITE")
+            rep_elements = self.envoyer_query("ELEMENTS")
             for i in range(HAUTEUR * LARGEUR):
                 l, c = divmod(i, LARGEUR)
                 self.plateau[(l, c)]['densite'] = int(rep_densite[i])
@@ -68,20 +80,19 @@ class BotNaif:
             for l, c in cases_libres:
                 if actions <= 0:
                     break
-                rep = self.envoyer(f"AJOUTERRECOLTEUSE|{l}|{c}")
+                rep = self.envoyer_action(f"AJOUTERRECOLTEUSE|{l}|{c}")
                 actions -= 1
                 if rep == "NOK":
                     break  # plus d'argent
 
-            self.sock.sendall(("FINDETOUR\n").encode("utf-8"))
+            self.sock.sendall(("FINDETOUR\n").encode('utf-8'))
+            print(f"[Naif] FINDETOUR envoyé")
 
 
 if __name__ == "__main__":
     try:
         BotNaif().connecter()
-    except ConnectionResetError:
-        print("[Naif] Déconnecté (fin de partie).")
-    except ConnectionError as e:
-        print(f"[Naif] Connexion perdue : {e}")
+    except (ConnectionResetError, ConnectionError) as e:
+        print(f"[Naif] Déconnecté : {e}")
     except KeyboardInterrupt:
         pass
