@@ -6,10 +6,10 @@ Ordre de priorité strict par tour:
   0. Collecte d'info (4 cmds)
   1. Survie: évacuer les récolteuses en danger (DANGER warning)
   2. Vision: renouveler ornithoptères dans secteurs actifs
-  3. Expansion agressivité: acheter récolteuses (heatmap)
+  3. Expansion: acheter récolteuses (heatmap density-aware + multi-joueurs)
   4. Industrie: placer usines (ROI positif)
-  5. Optimisation: repositionner récolteuses peu rentables
-  6. Sabotage: frapper les ennemis concentrés
+  5. Optimisation: repositionnement dynamique par gradient de densité
+  6. Sabotage: cibler intelligemment selon les profils ennemis
   7. FINDETOUR
 """
 
@@ -21,28 +21,39 @@ from game_state import (
 from strategy import (
     marginal_income, harvester_income, build_heatmap,
     best_factory_position, factory_roi, sabotage_value,
-    should_relocate, total_income, _find_best_free
+    should_relocate, total_income, _find_best_free,
+    analyze_enemies, find_density_peaks, density_score_area,
+    EnemyProfile
 )
 
 log = logging.getLogger(__name__)
 
 COST_HARVESTER = 3000
 COST_FACTORY   = 5000
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+COST_SABOTAGE  = 600
+ORNI_REFRESH   = 4
+=======
+>>>>>>> Stashed changes
 COST_ORNI      = 400
 COST_SABOTAGE  = 500
 ORNI_REFRESH   = 4   # Renouveler toutes les 4 tours (orni dure 5 tours)
+>>>>>>> f2a5c98b7dc9835c553043c2fc2fecf1ba13aaa2
 
-# Cibles de récolteuses selon la phase
 TARGETS = {
-    'EARLY': 5,   # Tours 1-40
-    'MID':   8,   # Tours 41-130
-    'LATE':  0,   # Tours 131+: on arrête d'acheter
+    'EARLY': 5,
+    'MID':   8,
+    'LATE':  0,
 }
 FACTORY_TARGETS = {
     'EARLY': 1,
     'MID':   3,
     'LATE':  3,
 }
+
+NO_SPEND_TURNS = {199, 200}
 
 
 def get_phase(turn: int) -> str:
@@ -58,14 +69,18 @@ class Brain:
         self.net        = net
         self.state      = GameState(player_id)
 
-        self.orni_deployed  = {}   # secteur -> tour dernier déploiement
-        self.sabotaged      = {}   # secteur -> tour dernier sabotage
+        self.orni_deployed   = {}
+        self.sabotaged       = {}
         self.density_fetched = False
 
-        # Compteur de commandes restantes ce tour
-        self.cmds = 0
+        # Cache pics de densité (recalculé tous les 5 tours)
+        self._density_peaks      = []
+        self._density_peaks_turn = -99
 
-        # Budget local mis à jour sans re-fetch
+        # Profils ennemis (mis à jour chaque tour)
+        self._enemy_profiles = {}
+
+        self.cmds   = 0
         self.budget = 0
 
     # ── Interface publique ─────────────────────────────────────────────────
@@ -83,45 +98,76 @@ class Brain:
         self._fetch_warnings()
         self._fetch_scores()
 
-        self.budget = self.state.my_score()
-        n_harv  = len(self.state.my_harvesters)
-        n_fact  = len(self.state.my_factories)
-        inc     = total_income(self.state)
+        self.budget  = self.state.my_score()
+        my_sc        = self.state.my_score()
+        enemy_sc     = self.state.max_enemy_score()
+        losing       = enemy_sc > my_sc
+        n_harv       = len(self.state.my_harvesters)
+        n_fact       = len(self.state.my_factories)
+        inc          = total_income(self.state)
 
-        log.info(f"[{phase}] T{turn} | Budget:{self.budget} | H:{n_harv} | "
-                 f"F:{n_fact} | Income:{inc:.0f}/tour | Cmds:{self.cmds}")
-        log.info(f"Warnings: {self.state.warnings}")
+        log.warning(f"[{phase}] T{turn} | Budget:{self.budget} | H:{n_harv} | "
+                    f"F:{n_fact} | Income:{inc:.0f}/t | "
+                    f"Nous:{my_sc} Eux:{enemy_sc} | Cmds:{self.cmds}")
+        log.warning(f"Warnings: {self.state.warnings}")
 
-        # Secteurs dangereux
-        dangerous = {s for s in range(4) if self.state.is_danger(s)}
-        # Pré-identifier les secteurs qu'on va saboter pour les exclure de la heatmap
-        condemned = self._preview_sabotage_targets(turn, phase)
+        # Secteurs dangereux / récemment attaqués
+        dangerous     = {s for s in range(4) if self.state.is_danger(s)}
+        recently_safe = {
+            s for s in range(4)
+            if self.state.recently_attacked(s, turn, cooldown=15)
+            and s not in dangerous
+        }
+        condemned = set()
+
+        # ── DERNIER TOUR ──────────────────────────────────────────────────
+        if turn in NO_SPEND_TURNS:
+            log.warning(f"Tour final {turn}: pas de dépenses")
+            self.net.send("FINDETOUR")
+            return
+
+        # ── Analyse des ennemis + pics de densité (pré-calcul partagé) ───
+        self._enemy_profiles = analyze_enemies(self.state)
+        self._log_enemies()
+
+        # Pics de densité: recalcul tous les 5 tours
+        if turn - self._density_peaks_turn >= 5:
+            self._density_peaks = find_density_peaks(self.state, top_n=10)
+            self._density_peaks_turn = turn
+            log.warning(f"  [DENSITY] {len(self._density_peaks)} pics, "
+                        f"top={self._density_peaks[0] if self._density_peaks else None}")
 
         # ── 1. SURVIE ─────────────────────────────────────────────────────
         self._evacuate(dangerous)
 
         # ── 2. VISION ─────────────────────────────────────────────────────
-        self._deploy_ornis(turn)
+        self._deploy_ornis(turn, recently_safe)
 
         # ── 3. EXPANSION ──────────────────────────────────────────────────
-        heatmap = build_heatmap(self.state, turn, phase, dangerous, condemned)
+        heatmap = build_heatmap(
+            self.state, turn, phase, dangerous, condemned,
+            recently_safe=recently_safe, losing=losing,
+            enemy_profiles=self._enemy_profiles,
+            density_peaks=self._density_peaks
+        )
         if phase != 'LATE':
-            self._buy_harvesters(heatmap, phase, turns_left)
+            max_h = self._dynamic_max_harvesters(phase, turns_left, losing)
+            self._buy_harvesters(heatmap, phase, turns_left, max_h)
 
         # ── 4. INDUSTRIE ──────────────────────────────────────────────────
         if phase != 'LATE':
             self._buy_factories(phase, turns_left)
 
-        # ── 5. OPTIMISATION ───────────────────────────────────────────────
+        # ── 5. REPOSITIONNEMENT DYNAMIQUE ─────────────────────────────────
         if turn >= 10:
-            self._reposition(dangerous)
+            self._reposition_dynamic(dangerous)
 
         # ── 6. SABOTAGE ───────────────────────────────────────────────────
-        self._sabotage(turn, phase, condemned)
+        self._sabotage(turn, phase, condemned, losing)
 
         # ── 7. FIN DE TOUR ────────────────────────────────────────────────
         self.net.send("FINDETOUR")
-        log.info(f"FIN T{turn} | Cmds restantes: {self.cmds}")
+        log.warning(f"FIN T{turn} | Cmds restantes: {self.cmds}")
 
     # ── Fetch helpers ──────────────────────────────────────────────────────
 
@@ -146,20 +192,38 @@ class Brain:
         self.state.update_scores(resp)
         self.cmds -= 1
 
+    # ── Logging ────────────────────────────────────────────────────────────
+
+    def _log_enemies(self):
+        for eid, p in self._enemy_profiles.items():
+            if p.total_count > 0:
+                log.warning(f"  [ENNEMI {eid}] {p.total_count} récolt. | "
+                            f"secteur dominant:{p.dominant_sector} | "
+                            f"centre:({p.density_center()})")
+
     # ── Action helpers ─────────────────────────────────────────────────────
 
     def _act(self, cmd) -> bool:
-        """Envoie une action de jeu si on a des commandes restantes."""
-        if self.cmds <= 1:  # garder 1 pour FINDETOUR
+        if self.cmds <= 1:
             return False
         ok = self.net.send_action(cmd)
         self.cmds -= 1
         return ok
 
+    # ── Calcul dynamique du plafond ────────────────────────────────────────
+
+    def _dynamic_max_harvesters(self, phase: str, turns_left: int, losing: bool) -> int:
+        base = TARGETS[phase]
+        if losing and self.budget > COST_HARVESTER * 3:
+            base = min(base + 2, 10)
+        n_harv = len(self.state.my_harvesters)
+        if n_harv < base - 2 and self.budget > COST_HARVESTER * 2:
+            base = min(base + 1, 10)
+        return base
+
     # ── 1. Survie ──────────────────────────────────────────────────────────
 
     def _evacuate(self, dangerous: set):
-        """Déplace toutes les récolteuses hors des secteurs en DANGER."""
         moved = set()
         for r, c in list(self.state.my_harvesters):
             if self.cmds <= 1:
@@ -168,14 +232,10 @@ class Brain:
             if sector not in dangerous:
                 continue
 
-            # Chercher la meilleure case safe, pas déjà ciblée ce tour
             dest = _find_best_free(
-                self.state,
-                avoid_sectors=dangerous,
-                exclude=moved | {(r, c)}
+                self.state, avoid_sectors=dangerous, exclude=moved | {(r, c)}
             )
             if dest is None:
-                # Si toutes les cases safe sont prises, prendre n'importe quelle case libre
                 for nr in range(ROWS):
                     for nc in range(COLS):
                         if self.state.is_free(nr, nc) and get_sector(nr, nc) not in dangerous:
@@ -187,113 +247,108 @@ class Brain:
             if dest:
                 nr, nc = dest
                 if self._act(f"DEPLACER|{r}|{c}|{nr}|{nc}"):
-                    log.info(f"  [SURVIE] ({r},{c}) → ({nr},{nc})")
+                    log.warning(f"  [SURVIE] ({r},{c}) → ({nr},{nc})")
                     self.state.move_harvester(r, c, nr, nc)
                     moved.add((nr, nc))
 
     # ── 2. Ornithoptères ───────────────────────────────────────────────────
 
-    def _deploy_ornis(self, turn: int):
-        """Déploie des ornithoptères dans tous les secteurs où on est actif."""
+    def _deploy_ornis(self, turn: int, recently_safe: set):
+        """Déploie des ornithoptères dans secteurs actifs + récemment libérés.
+        Priorité aux secteurs ennemis denses (pour surveiller le shadow)."""
         active_sectors = {get_sector(r, c) for r, c in self.state.my_harvesters}
-        for sector in active_sectors:
+
+        # Secteurs ennemis dominants (pour détecter mouvements adverses)
+        enemy_dominant = {p.dominant_sector for p in self._enemy_profiles.values()
+                          if p.dominant_sector >= 0 and p.total_count >= 3}
+
+        watch_sectors = active_sectors | recently_safe | enemy_dominant
+
+        # Trier: actifs d'abord, puis ennemis, puis recently_safe
+        ordered = (list(active_sectors) +
+                   [s for s in enemy_dominant if s not in active_sectors] +
+                   [s for s in recently_safe if s not in active_sectors | enemy_dominant])
+
+        for sector in ordered:
             if self.cmds <= 1:
                 break
             last = self.orni_deployed.get(sector, -999)
             if turn - last >= ORNI_REFRESH:
                 if self._act(f"AJOUTERORNI|{sector}"):
                     self.orni_deployed[sector] = turn
-                    log.info(f"  [ORNI] Secteur {sector}")
+                    log.warning(f"  [ORNI] Secteur {sector}")
 
     # ── 3. Achats récolteuses ──────────────────────────────────────────────
 
-    def _buy_harvesters(self, heatmap: list, phase: str, turns_left: int):
-        """Achète des récolteuses sur les meilleures cases de la heatmap."""
-        target = TARGETS[phase]
+    def _buy_harvesters(self, heatmap: list, phase: str, turns_left: int, max_h: int):
         n = len(self.state.my_harvesters)
-
-        # En tout début de partie: achat agressif
         if self.state.turn <= 3:
-            target = 4
+            max_h = max(max_h, 4)
 
         occupied_this_turn = set()
 
         for entry in heatmap:
-            if self.cmds <= 1:
-                break
-            if n >= target:
-                break
-            if self.budget < COST_HARVESTER:
-                break
+            if self.cmds <= 1: break
+            if n >= max_h: break
+            if self.budget < COST_HARVESTER: break
 
             r, c = entry['r'], entry['c']
-            if (r, c) in occupied_this_turn:
-                continue
-            if not self.state.is_free(r, c):
+            if (r, c) in occupied_this_turn or not self.state.is_free(r, c):
                 continue
 
-            # Vérif ROI minimal (sauf début de partie)
             score = entry['score']
             if turns_left > 0 and score * turns_left < COST_HARVESTER and self.state.turn > 10:
-                break  # Plus rentable d'acheter
+                break
 
-            # Pas trop proche d'un ennemi direct (anti-partage)
             enemy_adjacent = any(
-                state_elem not in ('X', 'U') and state_elem != str(self.player_id)
-                for state_elem in [
-                    self.state.elements[nr][nc]
-                    for nr, nc in hex_neighbors(r, c)
-                ]
+                self.state.elements[nr][nc] not in ('X', 'U')
+                and self.state.elements[nr][nc] != str(self.player_id)
+                for nr, nc in hex_neighbors(r, c)
             )
-            # On accepte quand même si pas de meilleure option
-            if enemy_adjacent and score < 50:
+            # Tolérer les voisins ennemis si la zone est dense (shadow profitable)
+            local_dens = entry.get('density', 0)
+            if enemy_adjacent and score < 50 and local_dens < 15:
                 continue
 
             if self._act(f"AJOUTERRECOLTEUSE|{r}|{c}"):
-                log.info(f"  [ACHAT] Récolteuse ({r},{c}) score={score:.0f}")
+                log.warning(f"  [ACHAT] ({r},{c}) score={score:.0f} dens={local_dens:.1f}")
                 self.state.place_harvester(r, c)
                 self.budget -= COST_HARVESTER
                 n += 1
                 occupied_this_turn.add((r, c))
-                # Invalider les cases voisines pour éviter double-achat adjacent
                 for nr, nc in hex_neighbors(r, c):
                     occupied_this_turn.add((nr, nc))
 
     # ── 4. Usines ──────────────────────────────────────────────────────────
 
     def _buy_factories(self, phase: str, turns_left: int):
-        """Place des usines si ROI positif."""
         max_fact = FACTORY_TARGETS[phase]
         n_fact   = len(self.state.my_factories)
-
-        if n_fact >= max_fact:
+        if n_fact >= max_fact or self.budget < COST_FACTORY:
             return
-        if self.budget < COST_FACTORY:
-            return
-        if not self.state.my_harvesters:
-            return
-        if self.cmds <= 1:
+        if not self.state.my_harvesters or self.cmds <= 1:
             return
 
         pos, roi = best_factory_position(self.state, turns_left)
         if pos is None:
             return
-
-        # ROI doit être positif, sauf très tôt en partie
         if roi < 0 and self.state.turn > 15:
-            log.debug(f"  [USINE] ROI négatif ({roi:.0f}), skip")
+            log.warning(f"  [USINE] ROI négatif ({roi:.0f}), skip")
             return
 
         r, c = pos
         if self._act(f"AJOUTERUSINE|{r}|{c}"):
-            log.info(f"  [USINE] ({r},{c}) ROI={roi:.0f}")
+            log.warning(f"  [USINE] ({r},{c}) ROI={roi:.0f}")
             self.state.place_factory(r, c)
             self.budget -= COST_FACTORY
 
-    # ── 5. Repositionnement ────────────────────────────────────────────────
+    # ── 5. Repositionnement dynamique ──────────────────────────────────────
 
-    def _reposition(self, dangerous: set):
-        """Déplace les récolteuses peu rentables vers de meilleures positions."""
+    def _reposition_dynamic(self, dangerous: set):
+        """
+        Repositionnement dynamique: chaque récolteuse suit le gradient de densité
+        et adapte sa position aux mouvements des adversaires.
+        """
         if self.cmds <= 2:
             return
 
@@ -303,15 +358,20 @@ class Brain:
             if sector in dangerous:
                 continue
             inc = harvester_income(self.state, r, c)
-            move, dest = should_relocate(self.state, r, c, threshold=1.35)
+            move, dest = should_relocate(
+                self.state, r, c,
+                threshold=1.2,  # seuil plus bas = mouvements plus réactifs
+                density_peaks=self._density_peaks,
+                enemy_profiles=self._enemy_profiles
+            )
             if move and dest:
                 candidates.append((r, c, dest[0], dest[1], inc))
 
-        # Trier par gain décroissant (les moins rentables en premier)
+        # Trier par revenu croissant (les moins rentables bougent en premier)
         candidates.sort(key=lambda x: x[4])
 
         moved_dests = set()
-        for r, c, nr, nc, inc in candidates[:3]:  # Max 3 repositionnements/tour
+        for r, c, nr, nc, inc in candidates[:3]:
             if self.cmds <= 1:
                 break
             if not self.state.is_free(nr, nc):
@@ -319,52 +379,31 @@ class Brain:
             if (nr, nc) in moved_dests:
                 continue
             new_inc = marginal_income(self.state, nr, nc)
-            if new_inc > inc * 1.35:
+            # Seuil réduit à 1.2 (vs 1.35) pour être plus réactif à la densité
+            if new_inc > inc * 1.15:
                 if self._act(f"DEPLACER|{r}|{c}|{nr}|{nc}"):
-                    log.info(f"  [REPOSITION] ({r},{c})→({nr},{nc}) "
-                             f"{inc:.0f}→{new_inc:.0f}/tour")
+                    log.warning(f"  [MOVE] ({r},{c})→({nr},{nc}) "
+                                f"inc:{inc:.0f}→{new_inc:.0f} "
+                                f"dens:{density_score_area(self.state, nr, nc):.1f}")
                     self.state.move_harvester(r, c, nr, nc)
                     moved_dests.add((nr, nc))
 
     # ── 6. Sabotage ────────────────────────────────────────────────────────
 
-    def _preview_sabotage_targets(self, turn: int, phase: str) -> set:
-        """Retourne les secteurs qu'on prévoit de saboter ce tour (sans les exécuter)."""
-        if self.budget < COST_SABOTAGE * 3:
-            return set()
-        targets = []
-        for sector in range(4):
-            if self.state.is_danger(sector):
-                continue
-            my = self.state.count_harvesters_in_sector(sector, self.player_id)
-            if my > 0:
-                continue
-            val = sabotage_value(self.state, sector)
-            if val <= 0:
-                continue
-            last = self.sabotaged.get(sector, -99)
-            if turn - last < 3:
-                continue
-            min_enemies = 1 if phase == 'LATE' else 2
-            enemy_count = self.state.count_harvesters_in_sector(sector) - my
-            if enemy_count < min_enemies:
-                continue
-            targets.append((val, sector))
-        targets.sort(reverse=True)
-        max_sabotages = 2 if phase == 'LATE' else 1
-        return {sector for _, sector in targets[:max_sabotages]}
-
-    def _sabotage(self, turn: int, phase: str, condemned: set):
-        """Sabote les secteurs ennemis les plus riches."""
-        if self.cmds <= 1:
-            return
-        if self.budget < COST_SABOTAGE * 3:
+    def _sabotage(self, turn: int, phase: str, condemned: set, losing: bool):
+        """
+        Sabotage intelligent basé sur les profils ennemis:
+        - Priorité aux secteurs où l'ennemi dominant est fort
+        - En retard: sabotage agressif multi-cible
+        - Coordination: ne pas saboter un secteur où on vient de se placer (shadow)
+        """
+        if self.cmds <= 1 or self.budget < COST_SABOTAGE * 3:
             return
 
         targets = []
         for sector in range(4):
             if self.state.is_danger(sector):
-                continue  # Inutile de saboter un secteur déjà sous attaque
+                continue
             my = self.state.count_harvesters_in_sector(sector, self.player_id)
             if my > 0:
                 continue  # Ne jamais saboter son propre secteur
@@ -375,27 +414,32 @@ class Brain:
 
             last = self.sabotaged.get(sector, -99)
             if turn - last < 3:
-                continue  # Cooldown
+                continue
 
-            # En LATE, harceler même les secteurs peu peuplés
-            min_enemies = 1 if phase == 'LATE' else 2
+            aggressive = losing or phase == 'LATE'
+            min_enemies = 1 if aggressive else 2
             enemy_count = self.state.count_harvesters_in_sector(sector) - my
             if enemy_count < min_enemies:
                 continue
 
-            targets.append((val, sector, enemy_count))
+            # Bonus: si l'ennemi dominant est dans ce secteur → priorité sabotage
+            dominant_bonus = 0
+            for eid, p in self._enemy_profiles.items():
+                if p.dominant_sector == sector and p.total_count >= 3:
+                    dominant_bonus = 1
+                    break
+
+            targets.append((val + dominant_bonus * 2000, sector, enemy_count))
 
         targets.sort(reverse=True)
 
-        max_sabotages = 2 if phase == 'LATE' else 1
+        max_sabotages = 3 if losing else (2 if phase == 'LATE' else 1)
         for val, sector, count in targets[:max_sabotages]:
-            if self.cmds <= 1:
-                break
-            if self.budget < COST_SABOTAGE:
+            if self.cmds <= 1 or self.budget < COST_SABOTAGE:
                 break
             if self._act(f"SABOTER|{sector}"):
-                log.info(f"  [SABOTAGE] Secteur {sector} "
-                         f"({count} ennemis, val={val:.0f})")
+                log.warning(f"  [SABOTAGE] Secteur {sector} "
+                            f"({count} ennemis, val={val:.0f})")
                 self.sabotaged[sector] = turn
                 self.budget -= COST_SABOTAGE
                 condemned.add(sector)

@@ -40,7 +40,7 @@ def hex_neighbors(row, col):
 
 def hex_distance(r1, c1, r2, c2):
     """Distance hexagonale exacte via coordonnées cubiques."""
-    # Conversion offset -> cube
+    # Conversion offset -> cube (odd-r)
     def to_cube(r, c):
         x = c - (r - (r & 1)) // 2
         z = r
@@ -86,6 +86,9 @@ class GameState:
         # Scores
         self.scores = {}
 
+        # Mémoire des attaques de vers: secteur -> dernier tour d'attaque
+        self.worm_attack_history = {}
+
         # Cache positions
         self._my_harvesters = None
         self._my_factories  = None
@@ -118,7 +121,12 @@ class GameState:
 
     def update_warnings(self, data):
         parts = data.strip().split('|')
-        self.warnings = (parts + ['INCONNU'] * 4)[:4]
+        new_warnings = (parts + ['INCONNU'] * 4)[:4]
+        # Mémoriser les attaques de vers (transition INCONNU/OK -> DANGER)
+        for s in range(4):
+            if new_warnings[s] == 'DANGER' and self.warnings[s] != 'DANGER':
+                self.worm_attack_history[s] = self.turn
+        self.warnings = new_warnings
 
     def update_scores(self, data):
         for i, p in enumerate(data.strip().split('|')):
@@ -171,12 +179,8 @@ class GameState:
         }
 
     @property
-    def all_factories(self):
-        """Toutes les usines visibles (le protocole ne distingue pas propriétaire)."""
-        return {
-            (r, c) for r in range(ROWS) for c in range(COLS)
-            if self.elements[r][c] == 'U'
-        }
+    def enemy_factories(self):
+        return self.my_factories  # simplifié: toutes les usines connues
 
     def is_free(self, r, c):
         return 0 <= r < ROWS and 0 <= c < COLS and self.elements[r][c] == 'X'
@@ -184,11 +188,20 @@ class GameState:
     def my_score(self):
         return self.scores.get(self.player_id, 0)
 
+    def max_enemy_score(self):
+        """Score maximum parmi les adversaires."""
+        return max((v for k, v in self.scores.items() if k != self.player_id), default=0)
+
     def is_danger(self, sector):
         return self.warnings[sector] == 'DANGER'
 
     def is_unknown(self, sector):
         return self.warnings[sector] == 'INCONNU'
+
+    def recently_attacked(self, sector, current_turn, cooldown=15):
+        """Retourne True si ce secteur a été récemment attaqué par un ver."""
+        last = self.worm_attack_history.get(sector, -999)
+        return (current_turn - last) < cooldown
 
     def has_factory_in_radius(self, r, c, radius=2):
         for nr, nc in cells_within_radius(r, c, radius):
