@@ -98,7 +98,7 @@ def get_adjacente(choix_matrice, x, y, maps):
 
     return mini_matrice
 
-def analyser_concurrence_epice(x, y, maps, mon_id):
+def analyze_competition_spice(x, y, maps, mon_id):
     """
     Analyse une case pour voir quelles récolteuses viennent pomper l'épice,
     et récupère automatiquement la densité de cette case.
@@ -149,7 +149,7 @@ def analyser_concurrence_epice(x, y, maps, mon_id):
                     
     return resultat
 
-def mettre_a_jour_carte(type_commande, donnees_serveur, maps):
+def update_map(type_commande, donnees_serveur, maps):
     """
     Met à jour la carte 'obj' ou 'dns' à partir de la chaîne de 288 caractères 
     renvoyée par le serveur.
@@ -177,5 +177,138 @@ def mettre_a_jour_carte(type_commande, donnees_serveur, maps):
         for x in range(18):
             index_1d = y * 18 + x
             carte_active[y][x] = donnees_serveur[index_1d]
-            
+
     return maps
+
+def apply_bonus_factories(maps):
+    """
+    Parcourt la carte des objets pour trouver les usines ('U').
+    Double la densité d'épice dans un rayon de 2 cases sur la carte des densités.
+    Le bonus ne se cumule pas et les cases contenant une usine tombent à 0 d'épice.
+    """
+    carte_obj = maps['obj']
+    carte_dns = maps['dns']
+    lignes_max = 16
+    cols_max = 18
+
+    cases_a_booster = set()
+    
+    def get_voisins(cx, cy):
+        voisins = []
+        offsets = [(1, 0), (-1, 0), (0, 1), (0, -1), (-1, 1), (-1, -1)]
+        for dx, dy in offsets:
+            nx, ny = cx + dx, cy + dy
+            if 0 <= nx < cols_max and 0 <= ny < lignes_max:
+                voisins.append((nx, ny))
+        return voisins
+
+    for y in range(lignes_max):
+        for x in range(cols_max):
+            if carte_obj[y][x] == 'U':
+                
+                carte_dns[y][x] = '0'
+                
+                voisins_d1 = get_voisins(x, y)
+                for v1x, v1y in voisins_d1:
+                    
+                    if carte_obj[v1y][v1x] != 'U':
+                        cases_a_booster.add((v1x, v1y))
+                    
+                    voisins_d2 = get_voisins(v1x, v1y)
+                    for v2x, v2y in voisins_d2:
+                        
+                        if carte_obj[v2y][v2x] != 'U':
+                            cases_a_booster.add((v2x, v2y))
+                            
+    for bx, by in cases_a_booster:
+        valeur_actuelle = int(carte_dns[by][bx])
+        nouvelle_valeur = valeur_actuelle * 2
+        carte_dns[by][bx] = str(nouvelle_valeur)
+        
+    return maps
+
+def find_best_locations(maps, top_n=10):
+    """
+    Analyse la carte pour trouver les meilleures cases libres ('X') où placer une récolteuse.
+    Calcule le rendement potentiel (case + 6 voisines) et établit un classement des secteurs.
+    
+    maps : dictionnaire des cartes 'obj' et 'dns'
+    top_n : le nombre de meilleures positions à retenir (10 par défaut)
+    """
+    carte_obj = maps['obj']
+    carte_dns = maps['dns']
+    lignes_max = 16
+    cols_max = 18
+    
+    tous_les_emplacements = []
+
+    # 1. On parcourt toute la carte
+    for y in range(lignes_max):
+        for x in range(cols_max):
+            
+            # On ne peut placer une récolteuse QUE sur une case vide
+            if carte_obj[y][x] == 'X':
+                
+                # Les 7 cases à évaluer (la case + les 6 voisines hexagonales)
+                zone_recolte = [
+                    (x, y),       (x+1, y),     (x-1, y),
+                    (x, y+1),     (x, y-1),     (x-1, y+1),   (x-1, y-1)
+                ]
+                
+                rendement_total = 0
+                
+                # On additionne la densité de toutes les cases valides de la zone
+                for vx, vy in zone_recolte:
+                    if 0 <= vx < cols_max and 0 <= vy < lignes_max:
+                        rendement_total += int(carte_dns[vy][vx])
+                
+                # Détermination du secteur selon les règles du manuel
+                if y < 8 and x < 9:
+                    secteur = 0
+                elif y < 8 and x >= 9:
+                    secteur = 1
+                elif y >= 8 and x < 9:
+                    secteur = 2
+                else:
+                    secteur = 3
+                    
+                # On sauvegarde cette position
+                tous_les_emplacements.append({
+                    "coords": (x, y),
+                    "rendement": rendement_total,
+                    "secteur": secteur
+                })
+
+    # 2. On trie la liste du plus grand rendement au plus petit
+    # La fonction lambda indique qu'on trie en se basant sur la clé 'rendement' du dictionnaire
+    tous_les_emplacements.sort(key=lambda item: item['rendement'], reverse=True)
+    
+    # On garde seulement le Top 10
+    top_emplacements = tous_les_emplacements[:top_n]
+    
+    # 3. Évaluation et classement des secteurs basés sur ce Top 10
+    stats_secteurs = {0: {"count": 0, "score_total": 0}, 1: {"count": 0, "score_total": 0}, 
+                      2: {"count": 0, "score_total": 0}, 3: {"count": 0, "score_total": 0}}
+    
+    for place in top_emplacements:
+        sec = place["secteur"]
+        stats_secteurs[sec]["count"] += 1
+        stats_secteurs[sec]["score_total"] += place["rendement"]
+        
+    # On crée une liste pour pouvoir la trier
+    classement_secteurs = []
+    for sec_id, stats in stats_secteurs.items():
+        classement_secteurs.append({
+            "secteur": sec_id,
+            "nombre_de_spots": stats["count"],
+            "score_cumule": stats["score_total"]
+        })
+        
+    # On trie les secteurs : d'abord par le nombre de bons spots, puis par le score cumulé pour départager
+    classement_secteurs.sort(key=lambda s: (s["nombre_de_spots"], s["score_cumule"]), reverse=True)
+
+    # On retourne le tout dans un dictionnaire propre
+    return {
+        "top_spots": top_emplacements,
+        "classement_secteurs": classement_secteurs
+    }
