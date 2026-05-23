@@ -1,4 +1,4 @@
-maps = [
+maps_obj = [
     ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 0
     ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 1
     ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'], # Ligne 2
@@ -17,7 +17,7 @@ maps = [
     ['X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X']  # Ligne 15
 ]
 
-maps_densité = [
+maps_dns = [
     ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 0
     ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 1
     ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'], # Ligne 2
@@ -36,44 +36,58 @@ maps_densité = [
     ['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1']  # Ligne 15
 ]
 
-def get_secteur(num, maps):
+
+maps = {
+    'obj': maps_obj,
+    'dns': maps_dns
+}
+
+def get_secteur(choix_matrice, num, maps):
     """
     Renvoie la liste des coordonnées (ligne, colonne) des cases d'un secteur donné.
 
-    maps : la carte du jeux
+    choix_matrice : 'obj' (pour les éléments) ou 'dns' (pour les densités)
+    maps : dictionnaire de la carte du jeu (ex: {'obj': [...], 'dns': [...]})
     num: numéro du secteur (0, 1, 2 ou 3).
     return: Matrice du secteur choisie.
     """
 
+    carte_active = maps[choix_matrice]
+
     limites_secteurs = {
-        0: (0, 8, 0, 9),    # Lignes 0 à 7, colonnes 0 à 8 [cite: 1]
-        1: (0, 8, 9, 18),   # Lignes 0 à 7, colonnes 9 à 17 [cite: 2]
-        2: (8, 16, 0, 9),   # Lignes 8 à 15, colonnes 0 à 8 [cite: 3]
-        3: (8, 16, 9, 18)   # Lignes 8 à 15, colonnes 9 à 17 [cite: 4]
+        0: (0, 8, 0, 9),    # Lignes 0 à 7, colonnes 0 à 8 [cite: 57]
+        1: (0, 8, 9, 18),   # Lignes 0 à 7, colonnes 9 à 17 [cite: 57]
+        2: (8, 16, 0, 9),   # Lignes 8 à 15, colonnes 0 à 8 [cite: 57]
+        3: (8, 16, 9, 18)   # Lignes 8 à 15, colonnes 9 à 17 [cite: 57]
     }
     
     if num not in limites_secteurs:
         raise ValueError("Le numéro du secteur doit être 0, 1, 2 ou 3.")
         
     r_min, r_max, c_min, c_max = limites_secteurs[num]
-    mini_matrice = [ligne[c_min:c_max] for ligne in maps[r_min:r_max]]
+    
+    mini_matrice = [ligne[c_min:c_max] for ligne in carte_active[r_min:r_max]]
     
     return mini_matrice 
 
-def get_adjacente(x, y, maps):
+def get_adjacente(choix_matrice, x, y, maps):
     """
     Renvoie une mini-matrice 3x3 centrée sur (x, y) avec ses voisins hexagonaux.
+    
+    choix_matrice : 'obj' ou 'dns'
     x : colonne (0 à 17)
     y : ligne (0 à 15)
-    carte : la matrice complète du jeu
+    maps : dictionnaire de la carte du jeu
     return : mini_matrice
     """
+
+    carte_active = maps[choix_matrice]
     lignes_max = 16
     cols_max = 18
 
     def get_case(col, lig):
         if 0 <= col < cols_max and 0 <= lig < lignes_max:
-            return maps[lig][col]
+            return carte_active[lig][col]
         return None
 
     mini_matrice = [
@@ -86,43 +100,41 @@ def get_adjacente(x, y, maps):
 
 def analyser_concurrence_epice(x, y, maps, mon_id):
     """
-    Analyse une case spécifique pour voir quelles récolteuses (alliées ou ennemies)
-    viennent pomper l'épice de cette case.
+    Analyse une case pour voir quelles récolteuses viennent pomper l'épice,
+    et récupère automatiquement la densité de cette case.
     
     x : colonne de la case ciblée (0 à 17)
     y : ligne de la case ciblée (0 à 15)
-    maps : carte du jeux
+    maps : dictionnaire contenant les deux cartes {'obj': ..., 'dns': ...}
     mon_id : string représentant le numéro de ton IA (ex: '0')
-    return : la case d'epice, la recolteuse_adverses, recolteuse_alliees, usine , divisions de la récolte
     """
+
+    carte_obj = maps['obj']
+    carte_dns = maps['dns']
 
     lignes_max = 16
     cols_max = 18
 
     voisins_coords = [
-        (x, y),       # La case elle-même
-        (x+1, y),     # Droite
-        (x-1, y),     # Gauche
-        (x, y+1),     # Bas
-        (x, y-1),     # Haut
-        (x-1, y+1),   # Bas-Gauche
-        (x-1, y-1)    # Haut-Gauche
+        (x, y),       (x+1, y),     (x-1, y),
+        (x, y+1),     (x, y-1),     (x-1, y+1),   (x-1, y-1)
     ]
 
     resultat = {
         "case_epice": (x, y),
-        "recolteuses_adverses": [], # Liste des concurrents
-        "recolteuses_alliees": [],  # Tes propres récolteuses déjà sur le coup
-        "usine_sur_case": False,    # Info cruciale pour le rendement
-        "diviseur_recolte": 0       # Combien de récolteuses se partagent le gâteau
+        "densite_epice": int(carte_dns[y][x]),
+        "recolteuses_adverses": [], 
+        "recolteuses_alliees": [],  
+        "usine_sur_case": False,    
+        "diviseur_recolte": 0       
     }
- 
-    if maps[y][x] == 'U':
+
+    if carte_obj[y][x] == 'U':
         resultat["usine_sur_case"] = True
 
     for vx, vy in voisins_coords:
         if 0 <= vx < cols_max and 0 <= vy < lignes_max:
-            element = maps[vy][vx]
+            element = carte_obj[vy][vx]
 
             if element.isdigit():
                 resultat["diviseur_recolte"] += 1
@@ -136,3 +148,34 @@ def analyser_concurrence_epice(x, y, maps, mon_id):
                     })
                     
     return resultat
+
+def mettre_a_jour_carte(type_commande, donnees_serveur, maps):
+    """
+    Met à jour la carte 'obj' ou 'dns' à partir de la chaîne de 288 caractères 
+    renvoyée par le serveur.
+    
+    type_commande : 'DENSITE' ou 'ELEMENTS'
+    donnees_serveur : string de 288 caractères reçue du serveur
+    maps : dictionnaire contenant tes matrices {'obj': [...], 'dns': [...]}
+    return : Le dictionnaire maps mis à jour
+    """
+
+    if len(donnees_serveur) != 288:
+        print(f"Erreur : Les données reçues font {len(donnees_serveur)} caractères au lieu de 288.")
+        return maps
+    if type_commande == "DENSITE":
+        cle_carte = 'dns'
+    elif type_commande == "ELEMENTS":
+        cle_carte = 'obj'
+    else:
+        print("Erreur : Type de commande inconnu. Utilisez 'DENSITE' ou 'ELEMENTS'.")
+        return maps
+        
+    carte_active = maps[cle_carte]
+
+    for y in range(16):
+        for x in range(18):
+            index_1d = y * 18 + x
+            carte_active[y][x] = donnees_serveur[index_1d]
+            
+    return maps
